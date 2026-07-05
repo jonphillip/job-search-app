@@ -1,0 +1,37 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  border-radius: 0;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #0f0f0f;
+  color: #ccccbb;
+  font-family: "Courier Prime", monospace;
+}
+
+main {
+  min-height: 100vh;
+}
+
+/* Sign-out button: hard border, orange hover (cannot do :hover inline) */
+.signout-btn {
+  font-family: "Courier Prime", monospace;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #ccccbb;
+  background: #141414;
+  border: 1px solid #333;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.signout-btn:hover {
+  border-color: #c94e1a;
+  color: #c94e1a;
+}

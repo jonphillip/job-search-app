@@ -1,0 +1,60 @@
+import { Authenticator, ThemeProvider } from "@aws-amplify/ui-react";
+import "@aws-amplify/ui-react/styles.css";
+import { theme } from "./theme";
+
+function App() {
+  return (
+    <ThemeProvider theme={theme}>
+      <Authenticator>
+        {({ signOut, user }) => (
+          <main>
+            <header
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "1rem",
+                padding: "12px 20px",
+                background: "#1a1a1a",
+                borderBottom: "1px solid #333",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: '"VT323", monospace',
+                  fontSize: "28px",
+                  lineHeight: 1,
+                  color: "#C94E1A",
+                }}
+              >
+                JOB TRACKER&copy;
+              </span>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: '"Courier Prime", monospace',
+                    fontSize: "14px",
+                    color: "#CCCCBB",
+                  }}
+                >
+                  {user?.signInDetails?.loginId}
+                </span>
+                <button className="signout-btn" onClick={signOut}>
+                  Sign out
+                </button>
+              </div>
+            </header>
+          </main>
+        )}
+      </Authenticator>
+    </ThemeProvider>
+  );
+}
+
+export default App;
