@@ -11,6 +11,18 @@ const client = generateClient<Schema>();
 
 type Company = Schema["Company"]["type"];
 type Role = Schema["Role"]["type"];
+type Contact = Schema["Contact"]["type"];
+type Interaction = Schema["Interaction"]["type"];
+
+type InteractionType = "EMAIL" | "CALL" | "COFFEE" | "DM" | "EVENT";
+
+const INTERACTION_TYPES: InteractionType[] = [
+  "EMAIL",
+  "CALL",
+  "COFFEE",
+  "DM",
+  "EVENT",
+];
 
 const STATUS_COLORS: Record<string, string> = {
   TARGETING: "#5BA85A",
@@ -21,6 +33,12 @@ const STATUS_COLORS: Record<string, string> = {
 function localToday(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function daysSince(date: string): number {
+  const [y, m, d] = date.split("-").map(Number);
+  const then = new Date(y, m - 1, d).getTime();
+  return Math.max(0, Math.floor((Date.now() - then) / 86_400_000));
 }
 
 function formatSalary(min?: number | null, max?: number | null): string {
@@ -135,6 +153,7 @@ function CompanyRow({
         <tr>
           <td colSpan={3} style={{ padding: 0, borderBottom: "1px solid #222" }}>
             <RoleSection companyId={company.id} />
+            <ContactSection companyId={company.id} />
           </td>
         </tr>
       )}
@@ -283,6 +302,344 @@ function RoleItem({ role }: { role: Role }) {
         {created ? "ADDED ✓" : creating ? "ADDING…" : "ADD APPLICATION"}
       </button>
     </li>
+  );
+}
+
+function ContactSection({ companyId }: { companyId: string }) {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const sub = client.models.Contact.observeQuery({
+      filter: { companyId: { eq: companyId } },
+    }).subscribe({
+      next: ({ items }) => {
+        setContacts([...items].sort((a, b) => a.name.localeCompare(b.name)));
+      },
+    });
+    return () => sub.unsubscribe();
+  }, [companyId]);
+
+  const toggle = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div style={{ ...nestedStyle, borderTop: "1px dashed #333" }}>
+      <h3 style={nestedHeadingStyle}>
+        CONTACTS <span style={{ color: "#C94E1A" }}>{contacts.length}</span>
+      </h3>
+      {contacts.length === 0 ? (
+        <p style={{ ...emptyStyle, padding: "0 0 12px" }}>No contacts yet.</p>
+      ) : (
+        <ul style={roleListStyle}>
+          {contacts.map((contact) => (
+            <ContactRow
+              key={contact.id}
+              contact={contact}
+              expanded={expandedIds.has(contact.id)}
+              onToggle={() => toggle(contact.id)}
+            />
+          ))}
+        </ul>
+      )}
+      <ContactForm companyId={companyId} />
+    </div>
+  );
+}
+
+function ContactRow({
+  contact,
+  expanded,
+  onToggle,
+}: {
+  contact: Contact;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const [interactions, setInteractions] = useState<Interaction[]>([]);
+
+  useEffect(() => {
+    const sub = client.models.Interaction.observeQuery({
+      filter: { contactId: { eq: contact.id } },
+    }).subscribe({
+      next: ({ items }) => {
+        setInteractions(
+          [...items].sort((a, b) => b.date.localeCompare(a.date)),
+        );
+      },
+    });
+    return () => sub.unsubscribe();
+  }, [contact.id]);
+
+  const lastTouchDays =
+    interactions.length > 0 ? daysSince(interactions[0].date) : null;
+
+  return (
+    <li style={{ display: "block", padding: 0, borderBottom: "1px solid #222" }}>
+      <div style={{ ...roleItemStyle, borderBottom: "none" }}>
+        <button
+          type="button"
+          className="company-name-btn"
+          onClick={onToggle}
+          aria-expanded={expanded}
+        >
+          <span style={{ color: "#666660", marginRight: "8px" }}>
+            {expanded ? "▼" : "▶"}
+          </span>
+          {contact.name}
+        </button>
+        {contact.title && <span style={roleMetaStyle}>{contact.title}</span>}
+        {contact.email && (
+          <a
+            href={`mailto:${contact.email}`}
+            style={{ color: "#C94E1A", fontSize: "13px" }}
+          >
+            {contact.email}
+          </a>
+        )}
+        {contact.linkedin && (
+          <a
+            href={contact.linkedin}
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: "#C94E1A", fontSize: "13px" }}
+          >
+            linkedin
+          </a>
+        )}
+        <span style={{ marginLeft: "auto", fontSize: "12px" }}>
+          {lastTouchDays === null ? (
+            <span style={{ color: "#883322" }}>no contact yet</span>
+          ) : (
+            <span
+              style={{ color: lastTouchDays > 14 ? "#C8951E" : "#666660" }}
+            >
+              last touch{" "}
+              <span
+                style={{ fontFamily: '"VT323", monospace', fontSize: "15px" }}
+              >
+                {lastTouchDays}
+              </span>{" "}
+              {lastTouchDays === 1 ? "day" : "days"} ago
+            </span>
+          )}
+        </span>
+      </div>
+      {expanded && (
+        <div style={interactionPanelStyle}>
+          {interactions.length === 0 ? (
+            <p style={{ ...emptyStyle, padding: "0 0 10px" }}>
+              No interactions logged.
+            </p>
+          ) : (
+            <ul style={roleListStyle}>
+              {interactions.map((interaction) => (
+                <li key={interaction.id} style={interactionItemStyle}>
+                  <span style={interactionTypeStyle}>{interaction.type}</span>
+                  <span style={interactionDateStyle}>{interaction.date}</span>
+                  {interaction.notes && (
+                    <span style={{ color: "#CCCCBB" }}>
+                      {interaction.notes}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <InteractionForm contactId={contact.id} />
+        </div>
+      )}
+    </li>
+  );
+}
+
+function ContactForm({ companyId }: { companyId: string }) {
+  const [name, setName] = useState("");
+  const [title, setTitle] = useState("");
+  const [email, setEmail] = useState("");
+  const [linkedin, setLinkedin] = useState("");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!name.trim()) return;
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      await client.models.Contact.create({
+        name: name.trim(),
+        title: title.trim() || undefined,
+        email: email.trim() || undefined,
+        linkedin: linkedin.trim() || undefined,
+        notes: notes.trim() || undefined,
+        companyId,
+      });
+      setName("");
+      setTitle("");
+      setEmail("");
+      setLinkedin("");
+      setNotes("");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to add contact. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={roleFormStyle}>
+      <span style={roleFormTitleStyle}>ADD CONTACT</span>
+      <div style={roleFormGridStyle}>
+        <label style={labelStyle}>
+          Name *
+          <input
+            className="field-input"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Title
+          <input
+            className="field-input"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Email
+          <input
+            className="field-input"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          LinkedIn
+          <input
+            className="field-input"
+            type="text"
+            value={linkedin}
+            onChange={(e) => setLinkedin(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
+          Notes
+          <textarea
+            className="field-input"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            style={{ ...inputStyle, resize: "vertical" }}
+          />
+        </label>
+      </div>
+      {error && <span style={errorStyle}>{error}</span>}
+      <button type="submit" className="btn-primary" disabled={submitting}>
+        {submitting ? "Adding…" : "Add Contact"}
+      </button>
+    </form>
+  );
+}
+
+function InteractionForm({ contactId }: { contactId: string }) {
+  const [type, setType] = useState<InteractionType>("EMAIL");
+  const [date, setDate] = useState(localToday());
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!date) return;
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      await client.models.Interaction.create({
+        type,
+        date,
+        notes: notes.trim() || undefined,
+        contactId,
+      });
+      setType("EMAIL");
+      setDate(localToday());
+      setNotes("");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to log interaction. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={roleFormStyle}>
+      <span style={roleFormTitleStyle}>LOG INTERACTION</span>
+      <div style={roleFormGridStyle}>
+        <label style={labelStyle}>
+          Type
+          <select
+            className="field-input"
+            value={type}
+            onChange={(e) => setType(e.target.value as InteractionType)}
+            style={inputStyle}
+          >
+            {INTERACTION_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label style={labelStyle}>
+          Date *
+          <input
+            className="field-input"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            required
+            style={{ ...inputStyle, colorScheme: "dark" }}
+          />
+        </label>
+        <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
+          Notes
+          <textarea
+            className="field-input"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            style={{ ...inputStyle, resize: "vertical" }}
+          />
+        </label>
+      </div>
+      {error && <span style={errorStyle}>{error}</span>}
+      <button type="submit" className="btn-primary" disabled={submitting}>
+        {submitting ? "Logging…" : "Log Interaction"}
+      </button>
+    </form>
   );
 }
 
@@ -532,6 +889,36 @@ const errorStyle: CSSProperties = {
   fontFamily: '"Courier Prime", monospace',
   fontSize: "13px",
   color: "#C86A5A",
+};
+
+const interactionPanelStyle: CSSProperties = {
+  margin: "0 0 12px 24px",
+  padding: "10px 12px",
+  background: "#141414",
+  border: "1px solid #222",
+};
+
+const interactionItemStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "baseline",
+  gap: "14px",
+  fontFamily: '"Courier Prime", monospace',
+  fontSize: "13px",
+  padding: "5px 0",
+  borderBottom: "1px solid #222",
+};
+
+const interactionTypeStyle: CSSProperties = {
+  color: "#C94E1A",
+  fontSize: "12px",
+  letterSpacing: "0.05em",
+  minWidth: "60px",
+};
+
+const interactionDateStyle: CSSProperties = {
+  fontFamily: '"VT323", monospace',
+  fontSize: "16px",
+  color: "#666660",
 };
 
 const statusSelectStyle: CSSProperties = {
