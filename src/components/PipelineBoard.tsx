@@ -65,7 +65,15 @@ interface CardData {
   app: Application;
   roleTitle: string;
   companyName: string;
+  company?: Company;
 }
+
+const ACTIVE_STATUSES: AppStatus[] = [
+  "APPLIED",
+  "SCREENING",
+  "INTERVIEW",
+  "OFFER",
+];
 
 export default function PipelineBoard() {
   const [applications, setApplications] = useState<Application[]>([]);
@@ -99,6 +107,7 @@ export default function PipelineBoard() {
         app,
         roleTitle: role?.title ?? "(unknown role)",
         companyName: company?.name ?? "(unknown company)",
+        company,
       };
     });
   }, [applications, roles, companies]);
@@ -202,6 +211,20 @@ function ApplicationCard({ card }: { card: CardData }) {
         status: newStatus,
         lastStatusChange: localToday(),
       });
+      // Auto-promotion: a DRAFT going active means we're actively pursuing
+      // this company, so bump RESEARCHING/COLD companies to TARGETING.
+      const { company } = card;
+      if (
+        status === "DRAFT" &&
+        ACTIVE_STATUSES.includes(newStatus) &&
+        company &&
+        (company.status === "RESEARCHING" || company.status === "COLD")
+      ) {
+        await client.models.Company.update({
+          id: company.id,
+          status: "TARGETING",
+        });
+      }
     } catch (err) {
       console.error(err);
     } finally {

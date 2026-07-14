@@ -114,17 +114,7 @@ function CompanyRow({
           </button>
         </td>
         <td style={cellStyle}>
-          <span
-            style={{
-              display: "inline-block",
-              width: "10px",
-              height: "10px",
-              borderRadius: "50%",
-              background: STATUS_COLORS[company.status ?? ""] ?? "#666660",
-              marginRight: "8px",
-            }}
-          />
-          {company.status}
+          <StatusEditor company={company} />
         </td>
         <td style={cellStyle}>
           {company.website ? (
@@ -149,6 +139,64 @@ function CompanyRow({
         </tr>
       )}
     </>
+  );
+}
+
+type CompanyStatus = "RESEARCHING" | "TARGETING" | "COLD";
+
+function StatusEditor({ company }: { company: Company }) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const save = async (status: CompanyStatus) => {
+    setSaving(true);
+    try {
+      await client.models.Company.update({ id: company.id, status });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <select
+        className="field-input"
+        autoFocus
+        value={company.status ?? "RESEARCHING"}
+        disabled={saving}
+        onChange={(e) => save(e.target.value as CompanyStatus)}
+        onBlur={() => setEditing(false)}
+        style={statusSelectStyle}
+      >
+        <option value="RESEARCHING">RESEARCHING</option>
+        <option value="TARGETING">TARGETING</option>
+        <option value="COLD">COLD</option>
+      </select>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="status-edit-btn"
+      onClick={() => setEditing(true)}
+      title="Change status"
+    >
+      <span
+        style={{
+          display: "inline-block",
+          width: "10px",
+          height: "10px",
+          borderRadius: "50%",
+          background: STATUS_COLORS[company.status ?? ""] ?? "#666660",
+          marginRight: "8px",
+        }}
+      />
+      {company.status ?? "—"}
+    </button>
   );
 }
 
@@ -484,4 +532,13 @@ const errorStyle: CSSProperties = {
   fontFamily: '"Courier Prime", monospace',
   fontSize: "13px",
   color: "#C86A5A",
+};
+
+const statusSelectStyle: CSSProperties = {
+  fontFamily: '"Courier Prime", monospace',
+  fontSize: "12px",
+  color: "#CCCCBB",
+  background: "#0f0f0f",
+  border: "1px solid #333",
+  padding: "3px 4px",
 };

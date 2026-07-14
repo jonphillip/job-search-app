@@ -52,6 +52,22 @@ main {
   color: #c94e1a;
 }
 
+/* Inline company status editor */
+.status-edit-btn {
+  font-family: "Courier Prime", monospace;
+  font-size: 14px;
+  color: #ccccbb;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.status-edit-btn:hover {
+  color: #c94e1a;
+}
+
 .field-input:focus {
   outline: none;
   border-color: #c94e1a;
