@@ -4,6 +4,7 @@ import { theme } from "./theme";
 import CompanyForm from "./components/CompanyForm";
 import CompanyList from "./components/CompanyList";
 import PipelineBoard from "./components/PipelineBoard";
+import SeedButton from "./components/SeedButton";
 
 function App() {
   return (
@@ -48,6 +49,7 @@ function App() {
                 >
                   {user?.signInDetails?.loginId}
                 </span>
+                <SeedButton />
                 <button className="signout-btn" onClick={signOut}>
                   Sign out
                 </button>
