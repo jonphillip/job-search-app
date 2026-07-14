@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
 import { generateClient } from "aws-amplify/data";
 import type { Schema } from "../../amplify/data/resource";
+import { normalizeUrl } from "./CompanyList";
 
 const client = generateClient<Schema>();
 
@@ -23,7 +24,7 @@ export default function CompanyForm() {
     try {
       await client.models.Company.create({
         name: name.trim(),
-        website: website.trim() || undefined,
+        website: website.trim() ? normalizeUrl(website) : undefined,
         status,
         notes: notes.trim() || undefined,
       });

@@ -13,6 +13,7 @@ type Company = Schema["Company"]["type"];
 type Role = Schema["Role"]["type"];
 type Contact = Schema["Contact"]["type"];
 type Interaction = Schema["Interaction"]["type"];
+type Application = Schema["Application"]["type"];
 
 type InteractionType = "EMAIL" | "CALL" | "COFFEE" | "DM" | "EVENT";
 
@@ -48,6 +49,159 @@ function formatSalary(min?: number | null, max?: number | null): string {
   if (max != null) return `up to ${fmt(max)}`;
   return "";
 }
+
+export function normalizeUrl(value: string): string {
+  const v = value.trim();
+  if (!v) return v;
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(v) ? v : `https://${v}`;
+}
+
+/* ---------- cascade deletes (schema has no cascade; deepest first) ---------- */
+
+async function listAll<T>(
+  page: (
+    nextToken?: string | null,
+  ) => Promise<{ data: T[]; nextToken?: string | null }>,
+): Promise<T[]> {
+  const items: T[] = [];
+  let nextToken: string | null | undefined;
+  do {
+    const res = await page(nextToken);
+    items.push(...res.data);
+    nextToken = res.nextToken;
+  } while (nextToken);
+  return items;
+}
+
+async function deleteRoleCascade(roleId: string) {
+  const apps = await listAll<Application>((nextToken) =>
+    client.models.Application.list({
+      filter: { roleId: { eq: roleId } },
+      nextToken,
+    }),
+  );
+  await Promise.all(
+    apps.map((a) => client.models.Application.delete({ id: a.id })),
+  );
+  await client.models.Role.delete({ id: roleId });
+}
+
+async function deleteContactCascade(contactId: string) {
+  const interactions = await listAll<Interaction>((nextToken) =>
+    client.models.Interaction.list({
+      filter: { contactId: { eq: contactId } },
+      nextToken,
+    }),
+  );
+  await Promise.all(
+    interactions.map((i) => client.models.Interaction.delete({ id: i.id })),
+  );
+  await client.models.Contact.delete({ id: contactId });
+}
+
+async function deleteCompanyCascade(companyId: string) {
+  const roles = await listAll<Role>((nextToken) =>
+    client.models.Role.list({
+      filter: { companyId: { eq: companyId } },
+      nextToken,
+    }),
+  );
+  for (const role of roles) {
+    await deleteRoleCascade(role.id);
+  }
+  const contacts = await listAll<Contact>((nextToken) =>
+    client.models.Contact.list({
+      filter: { companyId: { eq: companyId } },
+      nextToken,
+    }),
+  );
+  for (const contact of contacts) {
+    await deleteContactCascade(contact.id);
+  }
+  await client.models.Company.delete({ id: companyId });
+}
+
+/* ---------- shared small components ---------- */
+
+function DeleteControl({ onDelete }: { onDelete: () => Promise<void> }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      await onDelete();
+      // On success the record vanishes from observeQuery and this unmounts.
+    } catch (err) {
+      console.error(err);
+      setBusy(false);
+      setConfirming(false);
+    }
+  };
+
+  if (confirming) {
+    return (
+      <span style={confirmWrapStyle}>
+        <span style={{ color: "#883322" }}>
+          {busy ? "DELETING…" : "DELETE?"}
+        </span>
+        {!busy && (
+          <>
+            <button type="button" className="confirm-yes-btn" onClick={run}>
+              Y
+            </button>
+            <button
+              type="button"
+              className="confirm-no-btn"
+              onClick={() => setConfirming(false)}
+            >
+              N
+            </button>
+          </>
+        )}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="delete-x-btn"
+      title="Delete"
+      onClick={() => setConfirming(true)}
+    >
+      ✕
+    </button>
+  );
+}
+
+function NotesLine({
+  notes,
+  style,
+}: {
+  notes?: string | null;
+  style?: CSSProperties;
+}) {
+  const [full, setFull] = useState(false);
+  if (!notes) return null;
+  const long = notes.length > 100;
+  return (
+    <div style={{ ...notesLineStyle, ...style }}>
+      {long && !full ? notes.slice(0, 100) : notes}
+      {long && (
+        <button
+          type="button"
+          className="notes-more-btn"
+          onClick={() => setFull((v) => !v)}
+        >
+          {full ? " less" : "…more"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ---------- company list ---------- */
 
 export default function CompanyList() {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -115,6 +269,21 @@ function CompanyRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <tr>
+        <td colSpan={3} style={editRowCellStyle}>
+          <CompanyEditForm
+            company={company}
+            onDone={() => setEditing(false)}
+          />
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <>
       <tr>
@@ -130,23 +299,38 @@ function CompanyRow({
             </span>
             {company.name}
           </button>
+          <NotesLine notes={company.notes} style={{ marginLeft: "22px" }} />
         </td>
         <td style={cellStyle}>
           <StatusEditor company={company} />
         </td>
         <td style={cellStyle}>
-          {company.website ? (
-            <a
-              href={company.website}
-              target="_blank"
-              rel="noreferrer"
-              style={{ color: "#C94E1A" }}
-            >
-              {company.website}
-            </a>
-          ) : (
-            <span style={{ color: "#666660" }}>&mdash;</span>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            {company.website ? (
+              <a
+                href={normalizeUrl(company.website)}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: "#C94E1A" }}
+              >
+                {company.website}
+              </a>
+            ) : (
+              <span style={{ color: "#666660" }}>&mdash;</span>
+            )}
+            <span style={rowControlsStyle}>
+              <button
+                type="button"
+                className="edit-btn"
+                onClick={() => setEditing(true)}
+              >
+                EDIT
+              </button>
+              <DeleteControl
+                onDelete={() => deleteCompanyCascade(company.id)}
+              />
+            </span>
+          </div>
         </td>
       </tr>
       {expanded && (
@@ -158,6 +342,88 @@ function CompanyRow({
         </tr>
       )}
     </>
+  );
+}
+
+function CompanyEditForm({
+  company,
+  onDone,
+}: {
+  company: Company;
+  onDone: () => void;
+}) {
+  const [name, setName] = useState(company.name);
+  const [website, setWebsite] = useState(company.website ?? "");
+  const [notes, setNotes] = useState(company.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!name.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await client.models.Company.update({
+        id: company.id,
+        name: name.trim(),
+        website: website.trim() ? normalizeUrl(website) : null,
+        notes: notes.trim() || null,
+      });
+      onDone();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to save. Please try again.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={roleFormStyle}>
+      <span style={roleFormTitleStyle}>EDIT COMPANY</span>
+      <div style={roleFormGridStyle}>
+        <label style={labelStyle}>
+          Name *
+          <input
+            className="field-input"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Website
+          <input
+            className="field-input"
+            type="text"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
+          Notes
+          <textarea
+            className="field-input"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            style={{ ...inputStyle, resize: "vertical" }}
+          />
+        </label>
+      </div>
+      {error && <span style={errorStyle}>{error}</span>}
+      <div style={{ display: "flex", gap: "8px" }}>
+        <button type="submit" className="btn-primary" disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button type="button" className="signout-btn" onClick={onDone}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -219,6 +485,8 @@ function StatusEditor({ company }: { company: Company }) {
   );
 }
 
+/* ---------- roles ---------- */
+
 function RoleSection({ companyId }: { companyId: string }) {
   const [roles, setRoles] = useState<Role[]>([]);
 
@@ -253,6 +521,7 @@ function RoleSection({ companyId }: { companyId: string }) {
 function RoleItem({ role }: { role: Role }) {
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const addApplication = async () => {
     setCreating(true);
@@ -273,37 +542,293 @@ function RoleItem({ role }: { role: Role }) {
     }
   };
 
+  if (editing) {
+    return (
+      <li style={roleBlockStyle}>
+        <RoleEditForm role={role} onDone={() => setEditing(false)} />
+      </li>
+    );
+  }
+
   return (
-    <li style={roleItemStyle}>
-      <span style={{ color: "#CCCCBB" }}>{role.title}</span>
-      {role.location && <span style={roleMetaStyle}>{role.location}</span>}
-      {formatSalary(role.salaryMin, role.salaryMax) && (
-        <span style={salaryStyle}>
-          {formatSalary(role.salaryMin, role.salaryMax)}
+    <li style={roleBlockStyle}>
+      <div style={roleRowStyle}>
+        <span style={{ color: "#CCCCBB" }}>{role.title}</span>
+        {role.location && <span style={roleMetaStyle}>{role.location}</span>}
+        {formatSalary(role.salaryMin, role.salaryMax) && (
+          <span style={salaryStyle}>
+            {formatSalary(role.salaryMin, role.salaryMax)}
+          </span>
+        )}
+        {role.url && (
+          <a
+            href={normalizeUrl(role.url)}
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: "#C94E1A", fontSize: "13px" }}
+          >
+            posting
+          </a>
+        )}
+        <span style={{ ...rowControlsStyle, marginLeft: "auto" }}>
+          <button
+            type="button"
+            className="advance-btn"
+            disabled={creating}
+            onClick={addApplication}
+          >
+            {created ? "ADDED ✓" : creating ? "ADDING…" : "ADD APPLICATION"}
+          </button>
+          <button
+            type="button"
+            className="edit-btn"
+            onClick={() => setEditing(true)}
+          >
+            EDIT
+          </button>
+          <DeleteControl onDelete={() => deleteRoleCascade(role.id)} />
         </span>
-      )}
-      {role.url && (
-        <a
-          href={role.url}
-          target="_blank"
-          rel="noreferrer"
-          style={{ color: "#C94E1A", fontSize: "13px" }}
-        >
-          posting
-        </a>
-      )}
-      <button
-        type="button"
-        className="advance-btn"
-        disabled={creating}
-        onClick={addApplication}
-        style={{ marginLeft: "auto" }}
-      >
-        {created ? "ADDED ✓" : creating ? "ADDING…" : "ADD APPLICATION"}
-      </button>
+      </div>
+      <NotesLine notes={role.notes} />
     </li>
   );
 }
+
+function RoleEditForm({ role, onDone }: { role: Role; onDone: () => void }) {
+  const [title, setTitle] = useState(role.title);
+  const [url, setUrl] = useState(role.url ?? "");
+  const [salaryMin, setSalaryMin] = useState(
+    role.salaryMin != null ? String(role.salaryMin) : "",
+  );
+  const [salaryMax, setSalaryMax] = useState(
+    role.salaryMax != null ? String(role.salaryMax) : "",
+  );
+  const [location, setLocation] = useState(role.location ?? "");
+  const [notes, setNotes] = useState(role.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!title.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await client.models.Role.update({
+        id: role.id,
+        title: title.trim(),
+        url: url.trim() ? normalizeUrl(url) : null,
+        salaryMin: salaryMin ? Number(salaryMin) : null,
+        salaryMax: salaryMax ? Number(salaryMax) : null,
+        location: location.trim() || null,
+        notes: notes.trim() || null,
+      });
+      onDone();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to save. Please try again.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={roleFormStyle}>
+      <span style={roleFormTitleStyle}>EDIT ROLE</span>
+      <div style={roleFormGridStyle}>
+        <label style={labelStyle}>
+          Title *
+          <input
+            className="field-input"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          URL
+          <input
+            className="field-input"
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Salary Min
+          <input
+            className="field-input"
+            type="number"
+            min="0"
+            value={salaryMin}
+            onChange={(e) => setSalaryMin(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Salary Max
+          <input
+            className="field-input"
+            type="number"
+            min="0"
+            value={salaryMax}
+            onChange={(e) => setSalaryMax(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Location
+          <input
+            className="field-input"
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
+          Notes
+          <textarea
+            className="field-input"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            style={{ ...inputStyle, resize: "vertical" }}
+          />
+        </label>
+      </div>
+      {error && <span style={errorStyle}>{error}</span>}
+      <div style={{ display: "flex", gap: "8px" }}>
+        <button type="submit" className="btn-primary" disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button type="button" className="signout-btn" onClick={onDone}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function RoleForm({ companyId }: { companyId: string }) {
+  const [title, setTitle] = useState("");
+  const [url, setUrl] = useState("");
+  const [salaryMin, setSalaryMin] = useState("");
+  const [salaryMax, setSalaryMax] = useState("");
+  const [location, setLocation] = useState("");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!title.trim()) return;
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      await client.models.Role.create({
+        title: title.trim(),
+        url: url.trim() ? normalizeUrl(url) : undefined,
+        salaryMin: salaryMin ? Number(salaryMin) : undefined,
+        salaryMax: salaryMax ? Number(salaryMax) : undefined,
+        location: location.trim() || undefined,
+        notes: notes.trim() || undefined,
+        companyId,
+      });
+      setTitle("");
+      setUrl("");
+      setSalaryMin("");
+      setSalaryMax("");
+      setLocation("");
+      setNotes("");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to add role. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={roleFormStyle}>
+      <span style={roleFormTitleStyle}>ADD ROLE</span>
+      <div style={roleFormGridStyle}>
+        <label style={labelStyle}>
+          Title *
+          <input
+            className="field-input"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          URL
+          <input
+            className="field-input"
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Salary Min
+          <input
+            className="field-input"
+            type="number"
+            min="0"
+            value={salaryMin}
+            onChange={(e) => setSalaryMin(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Salary Max
+          <input
+            className="field-input"
+            type="number"
+            min="0"
+            value={salaryMax}
+            onChange={(e) => setSalaryMax(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Location
+          <input
+            className="field-input"
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
+          Notes
+          <textarea
+            className="field-input"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            style={{ ...inputStyle, resize: "vertical" }}
+          />
+        </label>
+      </div>
+      {error && <span style={errorStyle}>{error}</span>}
+      <button type="submit" className="btn-primary" disabled={submitting}>
+        {submitting ? "Adding…" : "Add Role"}
+      </button>
+    </form>
+  );
+}
+
+/* ---------- contacts ---------- */
 
 function ContactSection({ companyId }: { companyId: string }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -366,6 +891,7 @@ function ContactRow({
   onToggle: () => void;
 }) {
   const [interactions, setInteractions] = useState<Interaction[]>([]);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     const sub = client.models.Interaction.observeQuery({
@@ -383,9 +909,17 @@ function ContactRow({
   const lastTouchDays =
     interactions.length > 0 ? daysSince(interactions[0].date) : null;
 
+  if (editing) {
+    return (
+      <li style={roleBlockStyle}>
+        <ContactEditForm contact={contact} onDone={() => setEditing(false)} />
+      </li>
+    );
+  }
+
   return (
-    <li style={{ display: "block", padding: 0, borderBottom: "1px solid #222" }}>
-      <div style={{ ...roleItemStyle, borderBottom: "none" }}>
+    <li style={roleBlockStyle}>
+      <div style={roleRowStyle}>
         <button
           type="button"
           className="company-name-btn"
@@ -408,7 +942,7 @@ function ContactRow({
         )}
         {contact.linkedin && (
           <a
-            href={contact.linkedin}
+            href={normalizeUrl(contact.linkedin)}
             target="_blank"
             rel="noreferrer"
             style={{ color: "#C94E1A", fontSize: "13px" }}
@@ -416,26 +950,40 @@ function ContactRow({
             linkedin
           </a>
         )}
-        <span style={{ marginLeft: "auto", fontSize: "12px" }}>
-          {lastTouchDays === null ? (
-            <span style={{ color: "#883322" }}>no contact yet</span>
-          ) : (
-            <span
-              style={{ color: lastTouchDays > 14 ? "#C8951E" : "#666660" }}
-            >
-              last touch{" "}
+        <span style={{ ...rowControlsStyle, marginLeft: "auto" }}>
+          <span style={{ fontSize: "12px" }}>
+            {lastTouchDays === null ? (
+              <span style={{ color: "#883322" }}>no contact yet</span>
+            ) : (
               <span
-                style={{ fontFamily: '"VT323", monospace', fontSize: "15px" }}
+                style={{ color: lastTouchDays > 14 ? "#C8951E" : "#666660" }}
               >
-                {lastTouchDays}
-              </span>{" "}
-              {lastTouchDays === 1 ? "day" : "days"} ago
-            </span>
-          )}
+                last touch{" "}
+                <span
+                  style={{
+                    fontFamily: '"VT323", monospace',
+                    fontSize: "15px",
+                  }}
+                >
+                  {lastTouchDays}
+                </span>{" "}
+                {lastTouchDays === 1 ? "day" : "days"} ago
+              </span>
+            )}
+          </span>
+          <button
+            type="button"
+            className="edit-btn"
+            onClick={() => setEditing(true)}
+          >
+            EDIT
+          </button>
+          <DeleteControl onDelete={() => deleteContactCascade(contact.id)} />
         </span>
       </div>
       {expanded && (
         <div style={interactionPanelStyle}>
+          <NotesLine notes={contact.notes} style={{ margin: "0 0 8px" }} />
           {interactions.length === 0 ? (
             <p style={{ ...emptyStyle, padding: "0 0 10px" }}>
               No interactions logged.
@@ -462,6 +1010,112 @@ function ContactRow({
   );
 }
 
+function ContactEditForm({
+  contact,
+  onDone,
+}: {
+  contact: Contact;
+  onDone: () => void;
+}) {
+  const [name, setName] = useState(contact.name);
+  const [title, setTitle] = useState(contact.title ?? "");
+  const [email, setEmail] = useState(contact.email ?? "");
+  const [linkedin, setLinkedin] = useState(contact.linkedin ?? "");
+  const [notes, setNotes] = useState(contact.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!name.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await client.models.Contact.update({
+        id: contact.id,
+        name: name.trim(),
+        title: title.trim() || null,
+        email: email.trim() || null,
+        linkedin: linkedin.trim() ? normalizeUrl(linkedin) : null,
+        notes: notes.trim() || null,
+      });
+      onDone();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to save. Please try again.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={roleFormStyle}>
+      <span style={roleFormTitleStyle}>EDIT CONTACT</span>
+      <div style={roleFormGridStyle}>
+        <label style={labelStyle}>
+          Name *
+          <input
+            className="field-input"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Title
+          <input
+            className="field-input"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          Email
+          <input
+            className="field-input"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={labelStyle}>
+          LinkedIn
+          <input
+            className="field-input"
+            type="text"
+            value={linkedin}
+            onChange={(e) => setLinkedin(e.target.value)}
+            style={inputStyle}
+          />
+        </label>
+        <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
+          Notes
+          <textarea
+            className="field-input"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            style={{ ...inputStyle, resize: "vertical" }}
+          />
+        </label>
+      </div>
+      {error && <span style={errorStyle}>{error}</span>}
+      <div style={{ display: "flex", gap: "8px" }}>
+        <button type="submit" className="btn-primary" disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button type="button" className="signout-btn" onClick={onDone}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function ContactForm({ companyId }: { companyId: string }) {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
@@ -482,7 +1136,7 @@ function ContactForm({ companyId }: { companyId: string }) {
         name: name.trim(),
         title: title.trim() || undefined,
         email: email.trim() || undefined,
-        linkedin: linkedin.trim() || undefined,
+        linkedin: linkedin.trim() ? normalizeUrl(linkedin) : undefined,
         notes: notes.trim() || undefined,
         companyId,
       });
@@ -643,121 +1297,7 @@ function InteractionForm({ contactId }: { contactId: string }) {
   );
 }
 
-function RoleForm({ companyId }: { companyId: string }) {
-  const [title, setTitle] = useState("");
-  const [url, setUrl] = useState("");
-  const [salaryMin, setSalaryMin] = useState("");
-  const [salaryMax, setSalaryMax] = useState("");
-  const [location, setLocation] = useState("");
-  const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!title.trim()) return;
-
-    setSubmitting(true);
-    setError(null);
-    try {
-      await client.models.Role.create({
-        title: title.trim(),
-        url: url.trim() || undefined,
-        salaryMin: salaryMin ? Number(salaryMin) : undefined,
-        salaryMax: salaryMax ? Number(salaryMax) : undefined,
-        location: location.trim() || undefined,
-        notes: notes.trim() || undefined,
-        companyId,
-      });
-      setTitle("");
-      setUrl("");
-      setSalaryMin("");
-      setSalaryMax("");
-      setLocation("");
-      setNotes("");
-    } catch (err) {
-      console.error(err);
-      setError("Failed to add role. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} style={roleFormStyle}>
-      <span style={roleFormTitleStyle}>ADD ROLE</span>
-      <div style={roleFormGridStyle}>
-        <label style={labelStyle}>
-          Title *
-          <input
-            className="field-input"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            style={inputStyle}
-          />
-        </label>
-        <label style={labelStyle}>
-          URL
-          <input
-            className="field-input"
-            type="text"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            style={inputStyle}
-          />
-        </label>
-        <label style={labelStyle}>
-          Salary Min
-          <input
-            className="field-input"
-            type="number"
-            min="0"
-            value={salaryMin}
-            onChange={(e) => setSalaryMin(e.target.value)}
-            style={inputStyle}
-          />
-        </label>
-        <label style={labelStyle}>
-          Salary Max
-          <input
-            className="field-input"
-            type="number"
-            min="0"
-            value={salaryMax}
-            onChange={(e) => setSalaryMax(e.target.value)}
-            style={inputStyle}
-          />
-        </label>
-        <label style={labelStyle}>
-          Location
-          <input
-            className="field-input"
-            type="text"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            style={inputStyle}
-          />
-        </label>
-        <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
-          Notes
-          <textarea
-            className="field-input"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            style={{ ...inputStyle, resize: "vertical" }}
-          />
-        </label>
-      </div>
-      {error && <span style={errorStyle}>{error}</span>}
-      <button type="submit" className="btn-primary" disabled={submitting}>
-        {submitting ? "Adding…" : "Add Role"}
-      </button>
-    </form>
-  );
-}
+/* ---------- styles ---------- */
 
 const panelStyle: CSSProperties = {
   margin: "24px 20px 0",
@@ -799,6 +1339,36 @@ const cellStyle: CSSProperties = {
   color: "#CCCCBB",
   padding: "10px 16px",
   borderBottom: "1px solid #222",
+  verticalAlign: "top",
+};
+
+const editRowCellStyle: CSSProperties = {
+  padding: "12px 16px",
+  borderBottom: "1px solid #222",
+  background: "#131313",
+};
+
+const rowControlsStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  marginLeft: "auto",
+};
+
+const confirmWrapStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  fontFamily: '"Courier Prime", monospace',
+  fontSize: "11px",
+  letterSpacing: "0.05em",
+};
+
+const notesLineStyle: CSSProperties = {
+  fontFamily: '"Courier Prime", monospace',
+  fontSize: "12px",
+  color: "#666660",
+  marginTop: "3px",
 };
 
 const nestedStyle: CSSProperties = {
@@ -820,14 +1390,18 @@ const roleListStyle: CSSProperties = {
   padding: 0,
 };
 
-const roleItemStyle: CSSProperties = {
+const roleBlockStyle: CSSProperties = {
+  display: "block",
+  padding: "6px 0",
+  borderBottom: "1px solid #222",
+};
+
+const roleRowStyle: CSSProperties = {
   display: "flex",
   alignItems: "baseline",
   gap: "16px",
   fontFamily: '"Courier Prime", monospace',
   fontSize: "14px",
-  padding: "6px 0",
-  borderBottom: "1px solid #222",
 };
 
 const roleMetaStyle: CSSProperties = {
@@ -892,7 +1466,7 @@ const errorStyle: CSSProperties = {
 };
 
 const interactionPanelStyle: CSSProperties = {
-  margin: "0 0 12px 24px",
+  margin: "8px 0 6px 24px",
   padding: "10px 12px",
   background: "#141414",
   border: "1px solid #222",
