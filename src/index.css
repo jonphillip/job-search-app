@@ -35,3 +35,33 @@ main {
   border-color: #c94e1a;
   color: #c94e1a;
 }
+
+.field-input:focus {
+  outline: none;
+  border-color: #c94e1a;
+}
+
+.btn-primary {
+  font-family: "Courier Prime", monospace;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #0f0f0f;
+  background: #c94e1a;
+  border: 1px solid #c94e1a;
+  padding: 8px 16px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.btn-primary:hover {
+  background: #d8632f;
+  border-color: #d8632f;
+}
+
+.btn-primary:disabled {
+  background: #48200f;
+  border-color: #48200f;
+  color: #666660;
+  cursor: default;
+}

@@ -1,6 +1,8 @@
 import { Authenticator, ThemeProvider } from "@aws-amplify/ui-react";
 import "@aws-amplify/ui-react/styles.css";
 import { theme } from "./theme";
+import CompanyForm from "./components/CompanyForm";
+import CompanyList from "./components/CompanyList";
 
 function App() {
   return (
@@ -50,6 +52,8 @@ function App() {
                 </button>
               </div>
             </header>
+            <CompanyForm />
+            <CompanyList />
           </main>
         )}
       </Authenticator>
