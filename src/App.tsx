@@ -3,6 +3,7 @@ import "@aws-amplify/ui-react/styles.css";
 import { theme } from "./theme";
 import CompanyForm from "./components/CompanyForm";
 import CompanyList from "./components/CompanyList";
+import PipelineBoard from "./components/PipelineBoard";
 
 function App() {
   return (
@@ -52,6 +53,7 @@ function App() {
                 </button>
               </div>
             </header>
+            <PipelineBoard />
             <CompanyForm />
             <CompanyList />
           </main>

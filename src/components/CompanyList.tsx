@@ -18,6 +18,11 @@ const STATUS_COLORS: Record<string, string> = {
   COLD: "#883322",
 };
 
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function formatSalary(min?: number | null, max?: number | null): string {
   const fmt = (n: number) => `$${n.toLocaleString()}`;
   if (min != null && max != null) return `${fmt(min)}–${fmt(max)}`;
@@ -169,32 +174,67 @@ function RoleSection({ companyId }: { companyId: string }) {
       ) : (
         <ul style={roleListStyle}>
           {roles.map((role) => (
-            <li key={role.id} style={roleItemStyle}>
-              <span style={{ color: "#CCCCBB" }}>{role.title}</span>
-              {role.location && (
-                <span style={roleMetaStyle}>{role.location}</span>
-              )}
-              {formatSalary(role.salaryMin, role.salaryMax) && (
-                <span style={salaryStyle}>
-                  {formatSalary(role.salaryMin, role.salaryMax)}
-                </span>
-              )}
-              {role.url && (
-                <a
-                  href={role.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ color: "#C94E1A", fontSize: "13px" }}
-                >
-                  posting
-                </a>
-              )}
-            </li>
+            <RoleItem key={role.id} role={role} />
           ))}
         </ul>
       )}
       <RoleForm companyId={companyId} />
     </div>
+  );
+}
+
+function RoleItem({ role }: { role: Role }) {
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState(false);
+
+  const addApplication = async () => {
+    setCreating(true);
+    try {
+      const today = localToday();
+      await client.models.Application.create({
+        status: "DRAFT",
+        appliedDate: today,
+        lastStatusChange: today,
+        roleId: role.id,
+      });
+      setCreated(true);
+      setTimeout(() => setCreated(false), 2000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <li style={roleItemStyle}>
+      <span style={{ color: "#CCCCBB" }}>{role.title}</span>
+      {role.location && <span style={roleMetaStyle}>{role.location}</span>}
+      {formatSalary(role.salaryMin, role.salaryMax) && (
+        <span style={salaryStyle}>
+          {formatSalary(role.salaryMin, role.salaryMax)}
+        </span>
+      )}
+      {role.url && (
+        <a
+          href={role.url}
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: "#C94E1A", fontSize: "13px" }}
+        >
+          posting
+        </a>
+      )}
+      <button
+        type="button"
+        className="advance-btn"
+        disabled={creating}
+        onClick={addApplication}
+        style={{ marginLeft: "auto" }}
+      >
+        {created ? "ADDED ✓" : creating ? "ADDING…" : "ADD APPLICATION"}
+      </button>
+    </li>
   );
 }
 

@@ -57,6 +57,50 @@ main {
   border-color: #c94e1a;
 }
 
+/* Pipeline board */
+.pipeline-card:hover {
+  border-color: #c94e1a !important;
+}
+
+.advance-btn {
+  font-family: "Courier Prime", monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: #c94e1a;
+  background: none;
+  border: 1px solid #c94e1a;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.advance-btn:hover {
+  background: #c94e1a;
+  color: #0f0f0f;
+}
+
+.advance-btn:disabled {
+  color: #666660;
+  border-color: #333;
+  background: none;
+  cursor: default;
+}
+
+.strip-toggle-btn {
+  font-family: "VT323", monospace;
+  font-size: 17px;
+  letter-spacing: 0.05em;
+  color: #ccccbb;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.strip-toggle-btn:hover {
+  color: #c94e1a;
+}
+
 .btn-primary {
   font-family: "Courier Prime", monospace;
   font-size: 13px;
