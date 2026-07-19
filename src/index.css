@@ -16,6 +16,43 @@ body {
 
 main {
   min-height: 100vh;
+  /* Leave room for the fixed activity ticker at the bottom of the viewport. */
+  padding-bottom: 28px;
+}
+
+/* Recent-activity ticker */
+.ticker-track {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  white-space: nowrap;
+  will-change: transform;
+  animation-name: ticker-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.ticker-viewport:hover .ticker-track {
+  animation-play-state: paused;
+}
+
+.ticker-unit {
+  flex-shrink: 0;
+  padding-right: 8px;
+  font-family: "Courier Prime", monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: #666660;
+  white-space: nowrap;
+}
+
+@keyframes ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 /* Sign-out button: hard border, orange hover (cannot do :hover inline) */

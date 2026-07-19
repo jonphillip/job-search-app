@@ -4,6 +4,8 @@ import { theme } from "./theme";
 import CompanyForm from "./components/CompanyForm";
 import CompanyList from "./components/CompanyList";
 import PipelineBoard from "./components/PipelineBoard";
+import StatsBar from "./components/StatsBar";
+import ActivityTicker from "./components/ActivityTicker";
 import SeedButton from "./components/SeedButton";
 
 function App() {
@@ -58,9 +60,11 @@ function App() {
                 </button>
               </div>
             </header>
+            <StatsBar />
             <PipelineBoard />
             <CompanyForm />
             <CompanyList />
+            <ActivityTicker />
           </main>
         )}
       </Authenticator>
