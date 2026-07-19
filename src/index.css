@@ -112,6 +112,20 @@ main {
   border-color: #666660;
 }
 
+/* Hover-reveal row actions (kept visible on keyboard focus) */
+.tracker-row .edit-btn,
+.tracker-row .delete-x-btn {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.tracker-row:hover .edit-btn,
+.tracker-row:hover .delete-x-btn,
+.tracker-row:focus-within .edit-btn,
+.tracker-row:focus-within .delete-x-btn {
+  opacity: 1;
+}
+
 /* Expandable notes line */
 .notes-more-btn {
   font-family: "Courier Prime", monospace;
@@ -177,9 +191,11 @@ main {
 }
 
 .strip-toggle-btn {
-  font-family: "VT323", monospace;
-  font-size: 17px;
-  letter-spacing: 0.05em;
+  font-family: "Courier Prime", monospace;
+  font-weight: 700;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
   color: #ccccbb;
   background: none;
   border: none;

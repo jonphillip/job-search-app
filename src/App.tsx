@@ -25,9 +25,12 @@ function App() {
             >
               <span
                 style={{
-                  fontFamily: '"VT323", monospace',
-                  fontSize: "28px",
+                  fontFamily: '"Courier Prime", monospace',
+                  fontWeight: 700,
+                  fontSize: "22px",
                   lineHeight: 1,
+                  textTransform: "uppercase",
+                  letterSpacing: "3px",
                   color: "#C94E1A",
                 }}
               >

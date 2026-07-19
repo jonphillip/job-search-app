@@ -242,7 +242,14 @@ function ApplicationCard({ card }: { card: CardData }) {
           color: days > 7 ? "#C8951E" : "#666660",
         }}
       >
-        <span style={{ fontFamily: '"VT323", monospace', fontSize: "15px" }}>
+        <span
+          style={{
+            fontFamily: '"Courier Prime", monospace',
+            fontWeight: 700,
+            fontSize: "15px",
+            letterSpacing: "1.5px",
+          }}
+        >
           {days}
         </span>{" "}
         {days === 1 ? "day" : "days"} in {status.toLowerCase()}
@@ -283,8 +290,11 @@ const panelStyle: CSSProperties = {
 };
 
 const headingStyle: CSSProperties = {
-  fontFamily: '"VT323", monospace',
-  fontSize: "24px",
+  fontFamily: '"Courier Prime", monospace',
+  fontWeight: 700,
+  fontSize: "22px",
+  textTransform: "uppercase",
+  letterSpacing: "1.5px",
   color: "#CCCCBB",
   margin: 0,
   padding: "12px 16px",
@@ -307,8 +317,11 @@ const columnStyle: CSSProperties = {
 };
 
 const columnHeaderStyle: CSSProperties = {
-  fontFamily: '"VT323", monospace',
-  fontSize: "20px",
+  fontFamily: '"Courier Prime", monospace',
+  fontWeight: 700,
+  fontSize: "18px",
+  textTransform: "uppercase",
+  letterSpacing: "1.5px",
   color: "#CCCCBB",
   borderBottom: "1px solid #333",
   paddingBottom: "6px",

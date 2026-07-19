@@ -105,8 +105,11 @@ const panelStyle: CSSProperties = {
 };
 
 const headingStyle: CSSProperties = {
-  fontFamily: '"VT323", monospace',
-  fontSize: "24px",
+  fontFamily: '"Courier Prime", monospace',
+  fontWeight: 700,
+  fontSize: "22px",
+  textTransform: "uppercase",
+  letterSpacing: "1.5px",
   color: "#CCCCBB",
   margin: "0 0 16px",
 };

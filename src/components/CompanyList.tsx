@@ -286,7 +286,7 @@ function CompanyRow({
 
   return (
     <>
-      <tr>
+      <tr className="tracker-row">
         <td style={cellStyle}>
           <button
             type="button"
@@ -552,7 +552,7 @@ function RoleItem({ role }: { role: Role }) {
 
   return (
     <li style={roleBlockStyle}>
-      <div style={roleRowStyle}>
+      <div className="tracker-row" style={roleRowStyle}>
         <span style={{ color: "#CCCCBB" }}>{role.title}</span>
         {role.location && <span style={roleMetaStyle}>{role.location}</span>}
         {formatSalary(role.salaryMin, role.salaryMax) && (
@@ -919,7 +919,7 @@ function ContactRow({
 
   return (
     <li style={roleBlockStyle}>
-      <div style={roleRowStyle}>
+      <div className="tracker-row" style={roleRowStyle}>
         <button
           type="button"
           className="company-name-btn"
@@ -961,8 +961,10 @@ function ContactRow({
                 last touch{" "}
                 <span
                   style={{
-                    fontFamily: '"VT323", monospace',
+                    fontFamily: '"Courier Prime", monospace',
+                    fontWeight: 700,
                     fontSize: "15px",
+                    letterSpacing: "1.5px",
                   }}
                 >
                   {lastTouchDays}
@@ -1306,8 +1308,11 @@ const panelStyle: CSSProperties = {
 };
 
 const headingStyle: CSSProperties = {
-  fontFamily: '"VT323", monospace',
-  fontSize: "24px",
+  fontFamily: '"Courier Prime", monospace',
+  fontWeight: 700,
+  fontSize: "22px",
+  textTransform: "uppercase",
+  letterSpacing: "1.5px",
   color: "#CCCCBB",
   margin: 0,
   padding: "12px 16px",
@@ -1378,8 +1383,11 @@ const nestedStyle: CSSProperties = {
 };
 
 const nestedHeadingStyle: CSSProperties = {
-  fontFamily: '"VT323", monospace',
-  fontSize: "18px",
+  fontFamily: '"Courier Prime", monospace',
+  fontWeight: 700,
+  fontSize: "16px",
+  textTransform: "uppercase",
+  letterSpacing: "1.5px",
   color: "#CCCCBB",
   margin: "0 0 8px",
 };
@@ -1410,8 +1418,10 @@ const roleMetaStyle: CSSProperties = {
 };
 
 const salaryStyle: CSSProperties = {
-  fontFamily: '"VT323", monospace',
-  fontSize: "17px",
+  fontFamily: '"Courier Prime", monospace',
+  fontWeight: 700,
+  fontSize: "15px",
+  letterSpacing: "1.5px",
   color: "#C94E1A",
 };
 
@@ -1426,9 +1436,11 @@ const roleFormStyle: CSSProperties = {
 };
 
 const roleFormTitleStyle: CSSProperties = {
-  fontFamily: '"VT323", monospace',
-  fontSize: "16px",
-  letterSpacing: "0.08em",
+  fontFamily: '"Courier Prime", monospace',
+  fontWeight: 700,
+  fontSize: "14px",
+  textTransform: "uppercase",
+  letterSpacing: "1.5px",
   color: "#C94E1A",
 };
 
@@ -1490,8 +1502,10 @@ const interactionTypeStyle: CSSProperties = {
 };
 
 const interactionDateStyle: CSSProperties = {
-  fontFamily: '"VT323", monospace',
-  fontSize: "16px",
+  fontFamily: '"Courier Prime", monospace',
+  fontWeight: 700,
+  fontSize: "13px",
+  letterSpacing: "1.5px",
   color: "#666660",
 };
 
