@@ -12,7 +12,19 @@
       "Bash(git push *)",
       "Bash(npm run *)",
       "PowerShell(npx tsc --noEmit)",
-      "PowerShell(npx vite build 2>&1 | Select-Object -Last 15)"
+      "PowerShell(npx vite build 2>&1 | Select-Object -Last 15)",
+      "Bash(aws --version)",
+      "Bash(aws configure *)",
+      "Bash(aws sts *)",
+      "Bash(aws bedrock list-foundation-models *)",
+      "Bash(aws bedrock list-inference-profiles *)",
+      "Bash(grep -E \"^node$\")",
+      "Bash(npx vite *)",
+      "Bash(npx ampx *)",
+      "Bash(aws lambda *)",
+      "Bash(aws cloudformation *)",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter '\\\\''ProcessId=9684'\\\\'' | Select-Object ProcessId, @{n='\\\\''Cmd'\\\\'';e={$_.CommandLine}} | Format-List')",
+      "Bash(aws iam get-role-policy *)"
     ]
   }
 }

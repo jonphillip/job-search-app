@@ -1,4 +1,5 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { parseJobPosting } from '../functions/parse-job-posting/resource';
 
 const schema = a.schema({
   Company: a
@@ -67,6 +68,24 @@ const schema = a.schema({
       contact: a.belongsTo('Contact', 'contactId'),
     })
     .authorization((allow) => [allow.owner()]),
+
+  // Shape returned by the AI job-posting parser. Every field is nullable:
+  // the model returns null for anything not present in the source text.
+  ParsedJobPosting: a.customType({
+    companyName: a.string(),
+    roleTitle: a.string(),
+    location: a.string(),
+    salaryMin: a.integer(),
+    salaryMax: a.integer(),
+    url: a.string(),
+  }),
+
+  parseJobPosting: a
+    .query()
+    .arguments({ text: a.string().required() })
+    .returns(a.ref('ParsedJobPosting'))
+    .handler(a.handler.function(parseJobPosting))
+    .authorization((allow) => [allow.authenticated()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

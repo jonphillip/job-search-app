@@ -4,6 +4,7 @@ import { theme } from "./theme";
 import CompanyForm from "./components/CompanyForm";
 import CompanyList from "./components/CompanyList";
 import PipelineBoard from "./components/PipelineBoard";
+import JobPostingParser from "./components/JobPostingParser";
 import StatsBar from "./components/StatsBar";
 import ActivityTicker from "./components/ActivityTicker";
 import SeedButton from "./components/SeedButton";
@@ -63,6 +64,7 @@ function App() {
             <StatsBar />
             <PipelineBoard />
             <CompanyForm />
+            <JobPostingParser />
             <CompanyList />
             <ActivityTicker />
           </main>
