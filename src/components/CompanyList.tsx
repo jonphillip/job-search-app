@@ -589,6 +589,21 @@ function RoleItem({ role }: { role: Role }) {
           <DeleteControl onDelete={() => deleteRoleCascade(role.id)} />
         </span>
       </div>
+      {role.description && (
+        <div style={roleDescriptionStyle}>{role.description}</div>
+      )}
+      {role.requirements && role.requirements.length > 0 && (
+        <ul style={requirementListStyle}>
+          {role.requirements
+            .filter((r): r is string => !!r)
+            .map((req, i) => (
+              <li key={i} style={requirementItemStyle}>
+                <span style={requirementBulletStyle}>–</span>
+                <span>{req}</span>
+              </li>
+            ))}
+        </ul>
+      )}
       <NotesLine notes={role.notes} />
     </li>
   );
@@ -1374,6 +1389,33 @@ const notesLineStyle: CSSProperties = {
   fontSize: "12px",
   color: "#666660",
   marginTop: "3px",
+};
+
+const roleDescriptionStyle: CSSProperties = {
+  fontFamily: '"Courier Prime", monospace',
+  fontSize: "13px",
+  color: "#666660",
+  marginTop: "4px",
+};
+
+const requirementListStyle: CSSProperties = {
+  listStyle: "none",
+  margin: "6px 0 0",
+  padding: 0,
+};
+
+const requirementItemStyle: CSSProperties = {
+  display: "flex",
+  gap: "8px",
+  fontFamily: '"Courier Prime", monospace',
+  fontSize: "12px",
+  color: "#666660",
+  padding: "1px 0",
+};
+
+const requirementBulletStyle: CSSProperties = {
+  color: "#C94E1A",
+  flexShrink: 0,
 };
 
 const nestedStyle: CSSProperties = {

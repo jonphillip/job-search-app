@@ -14,6 +14,16 @@ interface Preview {
   salaryMin: string;
   salaryMax: string;
   url: string;
+  description: string;
+  // One requirement per line; split/joined on newlines at the edges.
+  requirements: string;
+}
+
+function splitRequirements(value: string): string[] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 }
 
 function salaryToInt(value: string): number | undefined {
@@ -56,6 +66,10 @@ export default function JobPostingParser() {
         salaryMin: data?.salaryMin != null ? String(data.salaryMin) : "",
         salaryMax: data?.salaryMax != null ? String(data.salaryMax) : "",
         url: data?.url ?? "",
+        description: data?.description ?? "",
+        requirements: (data?.requirements ?? [])
+          .filter((r): r is string => !!r)
+          .join("\n"),
       });
     } catch (err) {
       console.error(err);
@@ -95,6 +109,8 @@ export default function JobPostingParser() {
         companyId = created.data.id;
       }
 
+      const requirements = splitRequirements(preview.requirements);
+
       await client.models.Role.create({
         title: roleTitle,
         companyId,
@@ -102,6 +118,8 @@ export default function JobPostingParser() {
         location: preview.location.trim() || undefined,
         salaryMin: salaryToInt(preview.salaryMin),
         salaryMax: salaryToInt(preview.salaryMax),
+        description: preview.description.trim() || undefined,
+        requirements: requirements.length > 0 ? requirements : undefined,
       });
 
       setSavedMsg(
@@ -148,7 +166,7 @@ export default function JobPostingParser() {
           onClick={handleParse}
           disabled={parsing || !text.trim()}
         >
-          {parsing ? "PARSING…" : "PARSE WITH AI"}
+          {parsing ? "PARSING…" : "PARSE"}
         </button>
         {parseError && <span style={errorStyle}>{parseError}</span>}
         {savedMsg && <span style={successStyle}>{savedMsg}</span>}
@@ -193,6 +211,30 @@ export default function JobPostingParser() {
               placeholder="—"
             />
           </div>
+
+          <label style={{ ...labelStyle, marginTop: "12px" }}>
+            Description
+            <textarea
+              className="field-input"
+              value={preview.description}
+              onChange={(e) => setField("description", e.target.value)}
+              rows={2}
+              placeholder="One-line summary of the role…"
+              style={previewTextareaStyle}
+            />
+          </label>
+
+          <label style={{ ...labelStyle, marginTop: "12px" }}>
+            Requirements — one per line
+            <textarea
+              className="field-input"
+              value={preview.requirements}
+              onChange={(e) => setField("requirements", e.target.value)}
+              rows={5}
+              placeholder={"e.g.\n5+ years Python\nExperience with ASR models"}
+              style={previewTextareaStyle}
+            />
+          </label>
 
           {saveError && <span style={errorStyle}>{saveError}</span>}
 
@@ -336,6 +378,12 @@ const inputStyle: CSSProperties = {
   border: "1px solid #333",
   padding: "8px 10px",
   textTransform: "none",
+};
+
+const previewTextareaStyle: CSSProperties = {
+  ...inputStyle,
+  resize: "vertical",
+  width: "100%",
 };
 
 const errorStyle: CSSProperties = {

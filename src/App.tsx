@@ -7,7 +7,6 @@ import PipelineBoard from "./components/PipelineBoard";
 import JobPostingParser from "./components/JobPostingParser";
 import StatsBar from "./components/StatsBar";
 import ActivityTicker from "./components/ActivityTicker";
-import SeedButton from "./components/SeedButton";
 
 function App() {
   return (
@@ -55,7 +54,6 @@ function App() {
                 >
                   {user?.signInDetails?.loginId}
                 </span>
-                <SeedButton />
                 <button className="signout-btn" onClick={signOut}>
                   Sign out
                 </button>

@@ -20,6 +20,8 @@ const schema = a.schema({
       salaryMin: a.integer(),
       salaryMax: a.integer(),
       location: a.string(),
+      description: a.string(),
+      requirements: a.string().array(),
       notes: a.string(),
       companyId: a.id(),
       company: a.belongsTo('Company', 'companyId'),
@@ -78,6 +80,8 @@ const schema = a.schema({
     salaryMin: a.integer(),
     salaryMax: a.integer(),
     url: a.string(),
+    description: a.string(),
+    requirements: a.string().array(),
   }),
 
   parseJobPosting: a
