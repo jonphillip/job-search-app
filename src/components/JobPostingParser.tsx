@@ -17,7 +17,14 @@ interface Preview {
   description: string;
   // One requirement per line; split/joined on newlines at the edges.
   requirements: string;
+  compensationNote: string;
+  // Carried through from the parse; true when salary was estimated from an
+  // hourly wage. Not directly user-editable, but persisted with the role.
+  salaryIsEstimated: boolean;
 }
+
+// The string-valued preview fields that the plain text inputs edit.
+type StringField = Exclude<keyof Preview, "salaryIsEstimated">;
 
 function splitRequirements(value: string): string[] {
   return value
@@ -43,7 +50,7 @@ export default function JobPostingParser() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
-  const setField = (key: keyof Preview, value: string) =>
+  const setField = (key: StringField, value: string) =>
     setPreview((p) => (p ? { ...p, [key]: value } : p));
 
   const handleParse = async () => {
@@ -70,6 +77,8 @@ export default function JobPostingParser() {
         requirements: (data?.requirements ?? [])
           .filter((r): r is string => !!r)
           .join("\n"),
+        compensationNote: data?.compensationNote ?? "",
+        salaryIsEstimated: data?.salaryIsEstimated ?? false,
       });
     } catch (err) {
       console.error(err);
@@ -120,6 +129,8 @@ export default function JobPostingParser() {
           : undefined,
         salaryMin: salaryToInt(preview.salaryMin),
         salaryMax: salaryToInt(preview.salaryMax),
+        salaryIsEstimated: preview.salaryIsEstimated,
+        compensationNote: preview.compensationNote.trim() || undefined,
         description: preview.description.trim() || undefined,
         requirements: requirements.length > 0 ? requirements : undefined,
       });
@@ -213,6 +224,18 @@ export default function JobPostingParser() {
               placeholder="—"
             />
           </div>
+
+          <label style={{ ...labelStyle, marginTop: "12px" }}>
+            Compensation Note
+            <input
+              className="field-input"
+              type="text"
+              value={preview.compensationNote}
+              onChange={(e) => setField("compensationNote", e.target.value)}
+              placeholder="e.g. $20–$22/hr, full-time (~40 hrs/week assumed)"
+              style={{ ...inputStyle, width: "100%" }}
+            />
+          </label>
 
           <label style={{ ...labelStyle, marginTop: "12px" }}>
             Description

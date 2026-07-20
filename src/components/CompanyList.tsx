@@ -648,6 +648,8 @@ function RoleItem({ role }: { role: Role }) {
   const [created, setCreated] = useState(false);
   const [editing, setEditing] = useState(false);
 
+  const salary = formatSalary(role.salaryMin, role.salaryMax);
+
   const addApplication = async () => {
     setCreating(true);
     try {
@@ -682,11 +684,17 @@ function RoleItem({ role }: { role: Role }) {
         {role.location && (
           <span style={roleMetaStyle}>{normalizeLocation(role.location)}</span>
         )}
-        {formatSalary(role.salaryMin, role.salaryMax) && (
-          <span style={salaryStyle}>
-            {formatSalary(role.salaryMin, role.salaryMax)}
-          </span>
-        )}
+        {salary &&
+          (role.salaryIsEstimated ? (
+            <span
+              style={estimatedSalaryStyle}
+              title={role.compensationNote ?? undefined}
+            >
+              {salary} <span style={estLabelStyle}>(est.)</span>
+            </span>
+          ) : (
+            <span style={salaryStyle}>{salary}</span>
+          ))}
         {role.url && (
           <a
             href={normalizeUrl(role.url)}
@@ -716,6 +724,9 @@ function RoleItem({ role }: { role: Role }) {
           <DeleteControl onDelete={() => deleteRoleCascade(role.id)} />
         </span>
       </div>
+      {role.salaryIsEstimated && role.compensationNote && (
+        <div style={compNoteStyle}>{role.compensationNote}</div>
+      )}
       {role.description && (
         <div style={roleDescriptionStyle}>{role.description}</div>
       )}
@@ -1649,6 +1660,34 @@ const salaryStyle: CSSProperties = {
   fontSize: "15px",
   letterSpacing: "1.5px",
   color: "#C94E1A",
+};
+
+// Estimated (hourly→annual) salary: deliberately unlike a firm stated figure —
+// amber instead of the solid orange, italic, non-bold, with an "(est.)" tag.
+const estimatedSalaryStyle: CSSProperties = {
+  fontFamily: '"Courier Prime", monospace',
+  fontWeight: 400,
+  fontStyle: "italic",
+  fontSize: "15px",
+  letterSpacing: "1.5px",
+  color: "#C8951E",
+  cursor: "help",
+};
+
+const estLabelStyle: CSSProperties = {
+  fontStyle: "italic",
+  fontWeight: 400,
+  fontSize: "12px",
+  letterSpacing: "0.05em",
+  color: "#666660",
+};
+
+const compNoteStyle: CSSProperties = {
+  fontFamily: '"Courier Prime", monospace',
+  fontSize: "12px",
+  fontStyle: "italic",
+  color: "#666660",
+  marginTop: "3px",
 };
 
 const addRoleLinkStyle: CSSProperties = {

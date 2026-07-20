@@ -13,6 +13,8 @@ interface Parsed {
   location: string | null;
   salaryMin: number | null;
   salaryMax: number | null;
+  salaryIsEstimated: boolean;
+  compensationNote: string | null;
   url: string | null;
   description: string | null;
   requirements: string[];
@@ -24,6 +26,8 @@ const EMPTY: Parsed = {
   location: null,
   salaryMin: null,
   salaryMax: null,
+  salaryIsEstimated: false,
+  compensationNote: null,
   url: null,
   description: null,
   requirements: [],
@@ -34,16 +38,25 @@ Return ONLY a single JSON object, no prose, no markdown fences, with exactly the
 - companyName: string, the hiring company's name
 - roleTitle: string, the job title
 - location: string, e.g. "San Francisco, CA" or "Remote"
-- salaryMin: integer, the low end of the annual base salary in whole dollars (e.g. 150000)
-- salaryMax: integer, the high end of the annual base salary in whole dollars
+- salaryMin: integer, the low end of the ANNUAL base salary in whole dollars (e.g. 150000). May be a directly stated annual figure OR a computed estimate from an hourly wage (see salary rules).
+- salaryMax: integer, the high end of the ANNUAL base salary in whole dollars
+- salaryIsEstimated: boolean, true ONLY when salaryMin/salaryMax were computed from an hourly wage rather than stated as an annual figure; false otherwise
+- compensationNote: string, a short human-readable basis for an estimate, e.g. "$20–$22/hr, full-time (~40 hrs/week assumed)". Empty string when no estimation was done.
 - url: string, the posting/apply URL
 - description: string, a single terse one-line summary of the role (e.g. "TTS/voice AI. Primary target." register — clipped, factual, no marketing language, no full sentences required)
 - requirements: array of strings, the 3-6 most important qualifications/requirements actually stated in the posting, each a short phrase
 
 Rules:
-- Extract ONLY what is explicitly present in the text. Do not guess, infer, or invent anything.
+- Extract ONLY what is explicitly present in the text. Do not guess, infer, or invent anything (the hourly→annual estimation below is the sole exception, and only when an hourly wage is actually stated).
 - For any field not clearly stated, use null. For requirements, use an empty array if none are stated.
-- Salaries: convert "$150k" to 150000. If only a single salary figure is given, put it in both salaryMin and salaryMax. If hourly or non-annual, use null for both unless an annual figure is stated.
+- Salaries — a directly stated ANNUAL figure: convert "$150k" to 150000. If only a single figure is given, put it in both salaryMin and salaryMax. Set salaryIsEstimated: false and compensationNote: "".
+- Salaries — HOURLY wage stated instead of (or in addition to) an annual figure, and NO annual figure is stated: estimate the annual salary.
+  1. Extract the hourly range (a single hourly rate goes in both ends).
+  2. Determine weekly hours: use an explicit "X hours/week" if present; else derive from stated shift times if given; else if the role is marked full-time assume 40; else if part-time and no hours are stated, still assume the stated/derivable hours or 40 if truly unknown. If nothing indicates hours, assume a standard 40-hour week.
+  3. Compute annual = round(hourly × weeklyHours × 52) for each end, and store those in salaryMin/salaryMax.
+  4. Set salaryIsEstimated: true and compensationNote to a short basis string like "$20–$22/hr, full-time (~40 hrs/week assumed)".
+  If an annual figure IS directly stated, prefer it and do NOT estimate (salaryIsEstimated: false, compensationNote: "").
+- If neither an hourly wage nor an annual figure is present, salaryMin and salaryMax are null, salaryIsEstimated is false, compensationNote is "".
 - description: keep it to one short line in a clipped, note-taking style — not a paragraph, not marketing copy.
 - requirements: only include qualifications the posting actually lists; keep each entry short; do not pad to reach a count.
 - Never wrap the JSON in code fences or commentary.`;
@@ -69,6 +82,12 @@ function toStringArray(v: unknown): string[] {
   return v
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter((item) => item.length > 0);
+}
+
+function toBoolean(v: unknown): boolean {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'string') return v.trim().toLowerCase() === 'true';
+  return false;
 }
 
 function toIntOrNull(v: unknown): number | null {
@@ -114,12 +133,25 @@ export const handler: Schema['parseJobPosting']['functionHandler'] = async (
 
   const raw = extractJson(modelText) as Record<string, unknown>;
 
+  const salaryMin = toIntOrNull(raw.salaryMin);
+  const salaryMax = toIntOrNull(raw.salaryMax);
+  // An estimate only makes sense when we actually have a salary figure; the
+  // note is only meaningful alongside an estimate. Enforce that consistency
+  // regardless of what the model returned.
+  const hasSalary = salaryMin != null || salaryMax != null;
+  const salaryIsEstimated = hasSalary && toBoolean(raw.salaryIsEstimated);
+  const compensationNote = salaryIsEstimated
+    ? toStringOrNull(raw.compensationNote)
+    : null;
+
   return {
     companyName: toStringOrNull(raw.companyName),
     roleTitle: toStringOrNull(raw.roleTitle),
     location: toStringOrNull(raw.location),
-    salaryMin: toIntOrNull(raw.salaryMin),
-    salaryMax: toIntOrNull(raw.salaryMax),
+    salaryMin,
+    salaryMax,
+    salaryIsEstimated,
+    compensationNote,
     url: toStringOrNull(raw.url),
     description: toStringOrNull(raw.description),
     requirements: toStringArray(raw.requirements),
