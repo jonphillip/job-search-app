@@ -32,3 +32,21 @@ lambda.addToRolePolicy(
     ],
   }),
 );
+
+// On first invocation of a marketplace-brokered Bedrock model, Bedrock checks
+// the caller's Marketplace subscription for that model. These two actions are
+// what that check needs. Unlike bedrock:InvokeModel, the aws-marketplace
+// ViewSubscriptions/Subscribe actions do NOT support resource-level scoping:
+// they operate on the account's subscription state, not on a nameable resource,
+// so IAM only accepts Resource: "*" for them. We therefore isolate them in
+// their own statement with "*", leaving the bedrock:InvokeModel statement above
+// tightly scoped to the specific model/profile ARNs.
+lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: [
+      'aws-marketplace:ViewSubscriptions',
+      'aws-marketplace:Subscribe',
+    ],
+    resources: ['*'],
+  }),
+);
