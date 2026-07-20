@@ -996,6 +996,7 @@ function RoleForm({
 function ContactSection({ companyId }: { companyId: string }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     const sub = client.models.Contact.observeQuery({
@@ -1039,7 +1040,21 @@ function ContactSection({ companyId }: { companyId: string }) {
           ))}
         </ul>
       )}
-      <ContactForm companyId={companyId} />
+      {adding ? (
+        <ContactForm
+          companyId={companyId}
+          onAdded={() => setAdding(false)}
+          onCancel={() => setAdding(false)}
+        />
+      ) : (
+        <button
+          type="button"
+          style={addRoleLinkStyle}
+          onClick={() => setAdding(true)}
+        >
+          + add contact
+        </button>
+      )}
     </div>
   );
 }
@@ -1281,7 +1296,15 @@ function ContactEditForm({
   );
 }
 
-function ContactForm({ companyId }: { companyId: string }) {
+function ContactForm({
+  companyId,
+  onAdded,
+  onCancel,
+}: {
+  companyId: string;
+  onAdded?: () => void;
+  onCancel?: () => void;
+}) {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [email, setEmail] = useState("");
@@ -1310,6 +1333,7 @@ function ContactForm({ companyId }: { companyId: string }) {
       setEmail("");
       setLinkedin("");
       setNotes("");
+      onAdded?.();
     } catch (err) {
       console.error(err);
       setError("Failed to add contact. Please try again.");
@@ -1375,9 +1399,21 @@ function ContactForm({ companyId }: { companyId: string }) {
         </label>
       </div>
       {error && <span style={errorStyle}>{error}</span>}
-      <button type="submit" className="btn-primary" disabled={submitting}>
-        {submitting ? "Adding…" : "Add Contact"}
-      </button>
+      <div style={{ display: "flex", gap: "8px" }}>
+        <button type="submit" className="btn-primary" disabled={submitting}>
+          {submitting ? "Adding…" : "Add Contact"}
+        </button>
+        {onCancel && (
+          <button
+            type="button"
+            className="signout-btn"
+            onClick={onCancel}
+            disabled={submitting}
+          >
+            Cancel
+          </button>
+        )}
+      </div>
     </form>
   );
 }
