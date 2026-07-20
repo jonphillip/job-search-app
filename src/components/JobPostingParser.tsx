@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { generateClient } from "aws-amplify/data";
 import type { Schema } from "../../amplify/data/resource";
-import { normalizeUrl } from "./CompanyList";
+import { normalizeUrl, normalizeLocation } from "./CompanyList";
 
 const client = generateClient<Schema>();
 
@@ -115,7 +115,9 @@ export default function JobPostingParser() {
         title: roleTitle,
         companyId,
         url: preview.url.trim() ? normalizeUrl(preview.url) : undefined,
-        location: preview.location.trim() || undefined,
+        location: preview.location.trim()
+          ? normalizeLocation(preview.location)
+          : undefined,
         salaryMin: salaryToInt(preview.salaryMin),
         salaryMax: salaryToInt(preview.salaryMax),
         description: preview.description.trim() || undefined,

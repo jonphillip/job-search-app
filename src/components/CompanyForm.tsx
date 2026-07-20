@@ -8,6 +8,7 @@ const client = generateClient<Schema>();
 type CompanyStatus = "RESEARCHING" | "TARGETING" | "COLD";
 
 export default function CompanyForm() {
+  const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [website, setWebsite] = useState("");
   const [status, setStatus] = useState<CompanyStatus>("RESEARCHING");
@@ -42,8 +43,19 @@ export default function CompanyForm() {
 
   return (
     <section style={panelStyle}>
-      <h2 style={headingStyle}>Add Company</h2>
-      <form onSubmit={handleSubmit} style={formStyle}>
+      <button
+        type="button"
+        style={toggleStyle}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        {open ? "− CANCEL" : "+ ADD COMPANY"}
+      </button>
+      {open && (
+        <form
+          onSubmit={handleSubmit}
+          style={{ ...formStyle, marginTop: "16px" }}
+        >
         <label style={labelStyle}>
           Name *
           <input
@@ -89,10 +101,11 @@ export default function CompanyForm() {
           />
         </label>
         {error && <span style={errorStyle}>{error}</span>}
-        <button type="submit" className="btn-primary" disabled={submitting}>
-          {submitting ? "Adding…" : "Add Company"}
-        </button>
-      </form>
+          <button type="submit" className="btn-primary" disabled={submitting}>
+            {submitting ? "Adding…" : "Add Company"}
+          </button>
+        </form>
+      )}
     </section>
   );
 }
@@ -104,14 +117,18 @@ const panelStyle: CSSProperties = {
   padding: "16px",
 };
 
-const headingStyle: CSSProperties = {
+const toggleStyle: CSSProperties = {
   fontFamily: '"Courier Prime", monospace',
   fontWeight: 700,
   fontSize: "22px",
   textTransform: "uppercase",
   letterSpacing: "1.5px",
-  color: "#CCCCBB",
-  margin: "0 0 16px",
+  color: "#C94E1A",
+  background: "none",
+  border: "none",
+  padding: 0,
+  cursor: "pointer",
+  textAlign: "left",
 };
 
 const formStyle: CSSProperties = {

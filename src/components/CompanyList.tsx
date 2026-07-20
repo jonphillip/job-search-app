@@ -56,6 +56,82 @@ export function normalizeUrl(value: string): string {
   return /^[a-z][a-z0-9+.-]*:\/\//i.test(v) ? v : `https://${v}`;
 }
 
+// Full US state (and DC) names → USPS two-letter abbreviations.
+const US_STATES: Record<string, string> = {
+  alabama: "AL",
+  alaska: "AK",
+  arizona: "AZ",
+  arkansas: "AR",
+  california: "CA",
+  colorado: "CO",
+  connecticut: "CT",
+  delaware: "DE",
+  "district of columbia": "DC",
+  florida: "FL",
+  georgia: "GA",
+  hawaii: "HI",
+  idaho: "ID",
+  illinois: "IL",
+  indiana: "IN",
+  iowa: "IA",
+  kansas: "KS",
+  kentucky: "KY",
+  louisiana: "LA",
+  maine: "ME",
+  maryland: "MD",
+  massachusetts: "MA",
+  michigan: "MI",
+  minnesota: "MN",
+  mississippi: "MS",
+  missouri: "MO",
+  montana: "MT",
+  nebraska: "NE",
+  nevada: "NV",
+  "new hampshire": "NH",
+  "new jersey": "NJ",
+  "new mexico": "NM",
+  "new york": "NY",
+  "north carolina": "NC",
+  "north dakota": "ND",
+  ohio: "OH",
+  oklahoma: "OK",
+  oregon: "OR",
+  pennsylvania: "PA",
+  "rhode island": "RI",
+  "south carolina": "SC",
+  "south dakota": "SD",
+  tennessee: "TN",
+  texas: "TX",
+  utah: "UT",
+  vermont: "VT",
+  virginia: "VA",
+  washington: "WA",
+  "west virginia": "WV",
+  wisconsin: "WI",
+  wyoming: "WY",
+};
+
+const US_STATE_ABBRS = new Set(Object.values(US_STATES));
+
+// Normalize freeform location text toward "City, ST". Split on the first comma,
+// trim both parts, and map a full state name (or existing abbreviation) to its
+// two-letter code. If the state segment isn't a recognized US state (e.g.
+// "Remote", a country), it's left exactly as written rather than guessed at.
+export function normalizeLocation(value: string): string {
+  const v = value.trim();
+  if (!v) return v;
+  const comma = v.indexOf(",");
+  if (comma === -1) return v;
+  const city = v.slice(0, comma).trim();
+  const state = v.slice(comma + 1).trim();
+  const fromFullName = US_STATES[state.toLowerCase()];
+  if (fromFullName) return `${city}, ${fromFullName}`;
+  if (US_STATE_ABBRS.has(state.toUpperCase())) {
+    return `${city}, ${state.toUpperCase()}`;
+  }
+  return `${city}, ${state}`;
+}
+
 /* ---------- cascade deletes (schema has no cascade; deepest first) ---------- */
 
 async function listAll<T>(
@@ -71,6 +147,39 @@ async function listAll<T>(
     nextToken = res.nextToken;
   } while (nextToken);
   return items;
+}
+
+// One-time backfill: normalize location on every existing role. Guarded by a
+// localStorage flag (and a module-level flag) so it runs at most once per
+// browser; it's also idempotent, since re-normalizing an already-"City, ST"
+// value yields the same string and skips the update.
+const LOCATION_MIGRATION_KEY = "roleLocationNormalized_v1";
+let locationMigrationStarted = false;
+
+async function migrateRoleLocations() {
+  if (locationMigrationStarted) return;
+  locationMigrationStarted = true;
+  if (localStorage.getItem(LOCATION_MIGRATION_KEY)) return;
+  try {
+    const roles = await listAll<Role>((nextToken) =>
+      client.models.Role.list({ nextToken }),
+    );
+    await Promise.all(
+      roles
+        .filter((role) => role.location)
+        .map((role) => {
+          const normalized = normalizeLocation(role.location as string);
+          return normalized === role.location
+            ? null
+            : client.models.Role.update({ id: role.id, location: normalized });
+        })
+        .filter((p): p is NonNullable<typeof p> => p !== null),
+    );
+    localStorage.setItem(LOCATION_MIGRATION_KEY, "1");
+  } catch (err) {
+    console.error("Role location migration failed", err);
+    locationMigrationStarted = false; // allow a retry on next mount
+  }
 }
 
 async function deleteRoleCascade(roleId: string) {
@@ -208,6 +317,7 @@ export default function CompanyList() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    void migrateRoleLocations();
     const sub = client.models.Company.observeQuery().subscribe({
       next: ({ items }) => {
         setCompanies(
@@ -489,6 +599,7 @@ function StatusEditor({ company }: { company: Company }) {
 
 function RoleSection({ companyId }: { companyId: string }) {
   const [roles, setRoles] = useState<Role[]>([]);
+  const [addingManually, setAddingManually] = useState(false);
 
   useEffect(() => {
     const sub = client.models.Role.observeQuery({
@@ -513,7 +624,21 @@ function RoleSection({ companyId }: { companyId: string }) {
           ))}
         </ul>
       )}
-      <RoleForm companyId={companyId} />
+      {addingManually ? (
+        <RoleForm
+          companyId={companyId}
+          onAdded={() => setAddingManually(false)}
+          onCancel={() => setAddingManually(false)}
+        />
+      ) : (
+        <button
+          type="button"
+          style={addRoleLinkStyle}
+          onClick={() => setAddingManually(true)}
+        >
+          + add role manually
+        </button>
+      )}
     </div>
   );
 }
@@ -554,7 +679,9 @@ function RoleItem({ role }: { role: Role }) {
     <li style={roleBlockStyle}>
       <div className="tracker-row" style={roleRowStyle}>
         <span style={{ color: "#CCCCBB" }}>{role.title}</span>
-        {role.location && <span style={roleMetaStyle}>{role.location}</span>}
+        {role.location && (
+          <span style={roleMetaStyle}>{normalizeLocation(role.location)}</span>
+        )}
         {formatSalary(role.salaryMin, role.salaryMax) && (
           <span style={salaryStyle}>
             {formatSalary(role.salaryMin, role.salaryMax)}
@@ -727,7 +854,15 @@ function RoleEditForm({ role, onDone }: { role: Role; onDone: () => void }) {
   );
 }
 
-function RoleForm({ companyId }: { companyId: string }) {
+function RoleForm({
+  companyId,
+  onAdded,
+  onCancel,
+}: {
+  companyId: string;
+  onAdded?: () => void;
+  onCancel?: () => void;
+}) {
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [salaryMin, setSalaryMin] = useState("");
@@ -749,7 +884,7 @@ function RoleForm({ companyId }: { companyId: string }) {
         url: url.trim() ? normalizeUrl(url) : undefined,
         salaryMin: salaryMin ? Number(salaryMin) : undefined,
         salaryMax: salaryMax ? Number(salaryMax) : undefined,
-        location: location.trim() || undefined,
+        location: location.trim() ? normalizeLocation(location) : undefined,
         notes: notes.trim() || undefined,
         companyId,
       });
@@ -759,6 +894,7 @@ function RoleForm({ companyId }: { companyId: string }) {
       setSalaryMax("");
       setLocation("");
       setNotes("");
+      onAdded?.();
     } catch (err) {
       console.error(err);
       setError("Failed to add role. Please try again.");
@@ -836,9 +972,21 @@ function RoleForm({ companyId }: { companyId: string }) {
         </label>
       </div>
       {error && <span style={errorStyle}>{error}</span>}
-      <button type="submit" className="btn-primary" disabled={submitting}>
-        {submitting ? "Adding…" : "Add Role"}
-      </button>
+      <div style={{ display: "flex", gap: "8px" }}>
+        <button type="submit" className="btn-primary" disabled={submitting}>
+          {submitting ? "Adding…" : "Add Role"}
+        </button>
+        {onCancel && (
+          <button
+            type="button"
+            className="signout-btn"
+            onClick={onCancel}
+            disabled={submitting}
+          >
+            Cancel
+          </button>
+        )}
+      </div>
     </form>
   );
 }
@@ -1465,6 +1613,17 @@ const salaryStyle: CSSProperties = {
   fontSize: "15px",
   letterSpacing: "1.5px",
   color: "#C94E1A",
+};
+
+const addRoleLinkStyle: CSSProperties = {
+  fontFamily: '"Courier Prime", monospace',
+  fontSize: "13px",
+  color: "#666660",
+  background: "none",
+  border: "none",
+  padding: 0,
+  cursor: "pointer",
+  textAlign: "left",
 };
 
 const roleFormStyle: CSSProperties = {
