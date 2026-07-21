@@ -40,7 +40,11 @@ function salaryToInt(value: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-export default function JobPostingParser() {
+export default function JobPostingParser({
+  onDone,
+}: {
+  onDone?: () => void;
+} = {}) {
   const [text, setText] = useState("");
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -138,6 +142,8 @@ export default function JobPostingParser() {
       );
       setPreview(null);
       setText("");
+      // Collapse the fallback panel after a successful parse-and-add.
+      onDone?.();
     } catch (err) {
       console.error(err);
       setSaveError("Failed to save. Please try again.");
