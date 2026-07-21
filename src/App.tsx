@@ -6,6 +6,8 @@ import CompanyForm from "./components/CompanyForm";
 import CompanyList from "./components/CompanyList";
 import PipelineBoard from "./components/PipelineBoard";
 import JobPostingParser from "./components/JobPostingParser";
+import ProfileSection from "./components/ProfileSection";
+import Triage from "./components/Triage";
 import StatsBar from "./components/StatsBar";
 import ActivityTicker from "./components/ActivityTicker";
 
@@ -65,7 +67,9 @@ function App() {
               </div>
             </header>
             <StatsBar />
+            <ProfileSection />
             <PipelineBoard />
+            <Triage />
             <CompanyForm />
             <div style={parserToggleWrapStyle}>
               <button

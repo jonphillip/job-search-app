@@ -269,3 +269,28 @@ main {
   color: #666660;
   cursor: default;
 }
+
+/* "Score unscored roles" — a real call-to-action, but an outlined one (not
+   solid) since it kicks off a batch of Bedrock calls rather than a plain save. */
+.score-btn {
+  font-family: "Courier Prime", monospace;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #c8951e;
+  background: none;
+  border: 1px solid #c8951e;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.score-btn:hover {
+  background: #c8951e;
+  color: #0f0f0f;
+}
+
+.score-btn:disabled {
+  color: #666660;
+  border-color: #333;
+  cursor: default;
+}

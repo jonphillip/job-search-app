@@ -7,6 +7,7 @@ import {
 import { generateClient } from "aws-amplify/data";
 import type { Schema } from "../../amplify/data/resource";
 import { normalizeUrl, normalizeLocation } from "../lib/normalize";
+import { createDraftApplication } from "../lib/applications";
 import JobBoardImport from "./JobBoardImport";
 
 const client = generateClient<Schema>();
@@ -595,13 +596,7 @@ function RoleItem({ role }: { role: Role }) {
   const addApplication = async () => {
     setCreating(true);
     try {
-      const today = localToday();
-      await client.models.Application.create({
-        status: "DRAFT",
-        appliedDate: today,
-        lastStatusChange: today,
-        roleId: role.id,
-      });
+      await createDraftApplication(role.id);
       setCreated(true);
       setTimeout(() => setCreated(false), 2000);
     } catch (err) {

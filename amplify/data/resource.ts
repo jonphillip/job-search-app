@@ -1,6 +1,7 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { parseJobPosting } from '../functions/parse-job-posting/resource';
 import { fetchCompanyJobs } from '../functions/fetch-company-jobs/resource';
+import { scoreRole } from '../functions/score-role/resource';
 
 const schema = a.schema({
   Company: a
@@ -26,6 +27,16 @@ const schema = a.schema({
       description: a.string(),
       requirements: a.string().array(),
       notes: a.string(),
+      // AI role-fit scoring — set by the scoreRole triage action. scoredAt
+      // null means "not yet scored"; that's the queue the batch action drains.
+      fitScore: a.integer(),
+      attainability: a.enum(['ENTRY_FREELANCE', 'MID', 'SENIOR_ONLY']),
+      scoreRationale: a.string(),
+      scoreGaps: a.string(),
+      scoredAt: a.datetime(),
+      // "Not interested" — hides a scored role from the triage worklist
+      // without touching the role itself or its score.
+      triageDismissed: a.boolean(),
       companyId: a.id(),
       company: a.belongsTo('Company', 'companyId'),
       applications: a.hasMany('Application', 'roleId'),
@@ -74,6 +85,17 @@ const schema = a.schema({
     })
     .authorization((allow) => [allow.owner()]),
 
+  // The fixed picture role-fit scoring compares roles against. One per user,
+  // enforced at the app level (src/lib/profile.ts always updates the existing
+  // record rather than creating a second one) — owner auth already scopes
+  // reads/writes to the caller, so there's nothing to leak across users.
+  Profile: a
+    .model({
+      resumeText: a.string(),
+      targetingStatement: a.string(),
+    })
+    .authorization((allow) => [allow.owner()]),
+
   // Shape returned by the AI job-posting parser. Every field is nullable:
   // the model returns null for anything not present in the source text.
   ParsedJobPosting: a.customType({
@@ -119,6 +141,30 @@ const schema = a.schema({
     .arguments({ url: a.string(), atsType: a.string(), slug: a.string() })
     .returns(a.ref('FetchCompanyJobsResult'))
     .handler(a.handler.function(fetchCompanyJobs))
+    .authorization((allow) => [allow.authenticated()]),
+
+  // Result of scoring one role against the user's profile. attainability is
+  // a plain string here (not a.enum) — it's a transient return shape that the
+  // Lambda already validates against the known set before returning; the enum
+  // itself lives on the stored Role.attainability field, where it's earned.
+  ScoreRoleResult: a.customType({
+    fitScore: a.integer(),
+    attainability: a.string(),
+    rationale: a.string(),
+    gaps: a.string(),
+  }),
+
+  scoreRole: a
+    .query()
+    .arguments({
+      roleTitle: a.string().required(),
+      requirements: a.string().array(),
+      description: a.string(),
+      resumeText: a.string().required(),
+      targetingStatement: a.string(),
+    })
+    .returns(a.ref('ScoreRoleResult'))
+    .handler(a.handler.function(scoreRole))
     .authorization((allow) => [allow.authenticated()]),
 });
 
