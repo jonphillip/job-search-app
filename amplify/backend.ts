@@ -4,6 +4,7 @@ import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { parseJobPosting } from './functions/parse-job-posting/resource';
+import { fetchCompanyJobs } from './functions/fetch-company-jobs/resource';
 
 /**
  * @see https://docs.amplify.aws/react/build-a-backend/ to add storage, functions, and more
@@ -12,6 +13,9 @@ const backend = defineBackend({
   auth,
   data,
   parseJobPosting,
+  // fetch-company-jobs needs no IAM: it only makes outbound HTTPS calls to
+  // public job-board APIs from a default (non-VPC) Lambda.
+  fetchCompanyJobs,
 });
 
 // Allow the parser Lambda to invoke exactly the Claude Haiku 4.5 model it uses.

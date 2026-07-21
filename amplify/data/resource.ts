@@ -1,5 +1,6 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { parseJobPosting } from '../functions/parse-job-posting/resource';
+import { fetchCompanyJobs } from '../functions/fetch-company-jobs/resource';
 
 const schema = a.schema({
   Company: a
@@ -93,6 +94,31 @@ const schema = a.schema({
     .arguments({ text: a.string().required() })
     .returns(a.ref('ParsedJobPosting'))
     .handler(a.handler.function(parseJobPosting))
+    .authorization((allow) => [allow.authenticated()]),
+
+  // One normalized job posting fetched from a company's public job board.
+  FetchedJob: a.customType({
+    title: a.string(),
+    location: a.string(),
+    url: a.string(),
+    descriptionText: a.string(),
+  }),
+
+  // Result of a job-board fetch. On failure/empty, jobs is [] and message
+  // carries a human-readable explanation.
+  FetchCompanyJobsResult: a.customType({
+    count: a.integer(),
+    message: a.string(),
+    atsType: a.string(),
+    slug: a.string(),
+    jobs: a.ref('FetchedJob').array(),
+  }),
+
+  fetchCompanyJobs: a
+    .query()
+    .arguments({ url: a.string(), atsType: a.string(), slug: a.string() })
+    .returns(a.ref('FetchCompanyJobsResult'))
+    .handler(a.handler.function(fetchCompanyJobs))
     .authorization((allow) => [allow.authenticated()]),
 });
 

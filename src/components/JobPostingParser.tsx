@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { generateClient } from "aws-amplify/data";
 import type { Schema } from "../../amplify/data/resource";
-import { normalizeUrl, normalizeLocation } from "./CompanyList";
+import { createRoleFromDraft } from "../lib/roles";
 
 const client = generateClient<Schema>();
 
@@ -118,21 +118,17 @@ export default function JobPostingParser() {
         companyId = created.data.id;
       }
 
-      const requirements = splitRequirements(preview.requirements);
-
-      await client.models.Role.create({
-        title: roleTitle,
+      await createRoleFromDraft({
         companyId,
-        url: preview.url.trim() ? normalizeUrl(preview.url) : undefined,
-        location: preview.location.trim()
-          ? normalizeLocation(preview.location)
-          : undefined,
+        title: roleTitle,
+        url: preview.url,
+        location: preview.location,
         salaryMin: salaryToInt(preview.salaryMin),
         salaryMax: salaryToInt(preview.salaryMax),
         salaryIsEstimated: preview.salaryIsEstimated,
-        compensationNote: preview.compensationNote.trim() || undefined,
-        description: preview.description.trim() || undefined,
-        requirements: requirements.length > 0 ? requirements : undefined,
+        compensationNote: preview.compensationNote,
+        description: preview.description,
+        requirements: splitRequirements(preview.requirements),
       });
 
       setSavedMsg(
