@@ -202,7 +202,7 @@ export default function JobBoardImport({
           onKeyDown={(e) => {
             if (e.key === "Enter") handleFetch();
           }}
-          placeholder="Paste this company's Greenhouse or Ashby careers URL"
+          placeholder="Paste this company's Greenhouse, Ashby, or Lever careers URL"
           style={inputStyle}
           disabled={fetching}
         />

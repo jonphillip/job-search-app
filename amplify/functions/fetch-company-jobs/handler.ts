@@ -1,6 +1,6 @@
 import type { Schema } from '../../data/resource';
 
-type Ats = 'ASHBY' | 'GREENHOUSE';
+type Ats = 'ASHBY' | 'GREENHOUSE' | 'LEVER';
 
 interface NormalizedJob {
   title: string;
@@ -100,6 +100,11 @@ function detectFromUrl(rawUrl: string): { atsType: Ats | null; slug: string } {
     // Embedded boards carry the slug in ?for=, not the path.
     if (!slug || slug === 'embed') slug = parsed.searchParams.get('for') ?? '';
     return { atsType: 'GREENHOUSE', slug };
+  }
+  if (host.endsWith('lever.co')) {
+    // jobs.lever.co/{slug}; slug is the first path segment. Query params
+    // (e.g. ?department=...) are already excluded by using the pathname.
+    return { atsType: 'LEVER', slug: segments[0] ?? '' };
   }
   return { atsType: null, slug: '' };
 }
@@ -206,6 +211,66 @@ async function fetchGreenhouse(slug: string): Promise<NormalizedJob[]> {
     .filter((job) => job.title.length > 0);
 }
 
+/**
+ * Lever exposes optional compensation on a posting via `salaryRange`
+ * ({ min, max, currency, interval }) and/or a `salaryDescriptionPlain` string.
+ * Flatten whatever is present into a line appended to descriptionText, same as
+ * the Ashby fix, so parseJobPosting can pick up the salary. Returns '' when
+ * absent.
+ */
+function formatLeverCompensation(posting: Record<string, unknown>): string {
+  const plain = str(posting.salaryDescriptionPlain);
+  if (plain) return `Compensation: ${plain}`;
+
+  const range = posting.salaryRange;
+  if (range && typeof range === 'object') {
+    const r = range as Record<string, unknown>;
+    const min = typeof r.min === 'number' ? r.min : undefined;
+    const max = typeof r.max === 'number' ? r.max : undefined;
+    const currency = str(r.currency);
+    const interval = str(r.interval);
+    let amount = '';
+    if (min != null && max != null) amount = `${min}–${max}`;
+    else if (min != null) amount = `${min}`;
+    else if (max != null) amount = `${max}`;
+    if (amount) {
+      return `Compensation: ${currency ? `${currency} ` : ''}${amount}${
+        interval ? ` (${interval})` : ''
+      }`;
+    }
+  }
+  return '';
+}
+
+// Lever's posting API returns a bare JSON ARRAY (not { jobs: [...] }). apiHost
+// lets the caller retry the EU host (api.eu.lever.co) for EU-hosted accounts.
+async function fetchLever(slug: string, apiHost: string): Promise<NormalizedJob[]> {
+  const res = await fetch(
+    `https://${apiHost}/v0/postings/${encodeURIComponent(slug)}?mode=json`,
+    { headers: { accept: 'application/json' } },
+  );
+  if (!res.ok) throw new Error(`Lever responded ${res.status}`);
+  const data = await res.json();
+  const postings = Array.isArray(data) ? data : [];
+  return postings
+    .map((entry): NormalizedJob => {
+      const posting = entry as Record<string, unknown>;
+      const categories = posting.categories as
+        | Record<string, unknown>
+        | undefined;
+      const base =
+        str(posting.descriptionPlain) || stripHtml(str(posting.description));
+      const comp = formatLeverCompensation(posting);
+      return {
+        title: str(posting.text),
+        location: categories ? str(categories.location) : '',
+        url: str(posting.hostedUrl) || str(posting.applyUrl),
+        descriptionText: comp ? (base ? `${base}\n\n${comp}` : comp) : base,
+      };
+    })
+    .filter((job) => job.title.length > 0);
+}
+
 type Attempt = { ok: boolean; jobs: NormalizedJob[] };
 
 async function attempt(fn: () => Promise<NormalizedJob[]>): Promise<Attempt> {
@@ -229,7 +294,7 @@ export const handler: Schema['fetchCompanyJobs']['functionHandler'] = async (
 
   if (atsArg && slugArg) {
     const upper = String(atsArg).toUpperCase();
-    if (upper === 'ASHBY' || upper === 'GREENHOUSE') {
+    if (upper === 'ASHBY' || upper === 'GREENHOUSE' || upper === 'LEVER') {
       atsType = upper;
       slug = String(slugArg).trim();
     }
@@ -242,11 +307,12 @@ export const handler: Schema['fetchCompanyJobs']['functionHandler'] = async (
   if (!atsType || !slug) {
     return result({
       message:
-        "Couldn't recognize a Greenhouse or Ashby careers URL. Paste a link like jobs.ashbyhq.com/acme or boards.greenhouse.io/acme.",
+        "Couldn't recognize a Greenhouse, Ashby, or Lever careers URL. Paste a link like jobs.ashbyhq.com/acme, boards.greenhouse.io/acme, or jobs.lever.co/acme.",
     });
   }
 
-  const label = atsType === 'ASHBY' ? 'Ashby' : 'Greenhouse';
+  const label =
+    atsType === 'ASHBY' ? 'Ashby' : atsType === 'LEVER' ? 'Lever' : 'Greenhouse';
   let outcome: Attempt;
 
   if (atsType === 'ASHBY') {
@@ -256,6 +322,14 @@ export const handler: Schema['fetchCompanyJobs']['functionHandler'] = async (
     outcome = await attempt(() => fetchAshby(lower));
     if ((!outcome.ok || outcome.jobs.length === 0) && slug !== lower) {
       const retry = await attempt(() => fetchAshby(slug));
+      if (retry.jobs.length > 0 || (!outcome.ok && retry.ok)) outcome = retry;
+    }
+  } else if (atsType === 'LEVER') {
+    // Some Lever accounts are EU-hosted: if the primary host is empty or
+    // errors (e.g. 404), retry api.eu.lever.co before giving up.
+    outcome = await attempt(() => fetchLever(slug, 'api.lever.co'));
+    if (!outcome.ok || outcome.jobs.length === 0) {
+      const retry = await attempt(() => fetchLever(slug, 'api.eu.lever.co'));
       if (retry.jobs.length > 0 || (!outcome.ok && retry.ok)) outcome = retry;
     }
   } else {
