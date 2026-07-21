@@ -104,6 +104,53 @@ function detectFromUrl(rawUrl: string): { atsType: Ats | null; slug: string } {
   return { atsType: null, slug: '' };
 }
 
+/* ---------- Ashby compensation → text ---------- */
+
+/**
+ * Ashby returns pay in a structured `compensation` object (because we request
+ * includeCompensation=true), NOT in descriptionPlain. Flatten it into a short
+ * readable line, e.g.:
+ *   "Compensation: Senior Software Engineer — $197K–$246K; Staff Software Engineer — $246K–$307K"
+ * so it can be appended to descriptionText and picked up by parseJobPosting the
+ * same way a manually pasted salary line would be. Returns '' when absent.
+ */
+function formatAshbyCompensation(comp: unknown): string {
+  if (!comp || typeof comp !== 'object') return '';
+  const c = comp as Record<string, unknown>;
+
+  const tiers = Array.isArray(c.compensationTiers) ? c.compensationTiers : [];
+  const parts: string[] = [];
+  for (const entry of tiers) {
+    if (!entry || typeof entry !== 'object') continue;
+    const tier = entry as Record<string, unknown>;
+    const title = str(tier.title);
+
+    // Prefer the Salary component's own summary (avoids equity/bonus noise);
+    // fall back to the tier's overall summary.
+    let summary = '';
+    const components = Array.isArray(tier.components) ? tier.components : [];
+    for (const c2 of components) {
+      const component = c2 as Record<string, unknown>;
+      if (str(component.componentType).toLowerCase() === 'salary') {
+        summary = str(component.summary);
+        break;
+      }
+    }
+    if (!summary) summary = str(tier.tierSummary);
+    if (!summary) continue;
+
+    parts.push(title ? `${title} — ${summary}` : summary);
+  }
+
+  if (parts.length > 0) return `Compensation: ${parts.join('; ')}`;
+
+  // No structured tiers — use whatever top-level summary string Ashby provides.
+  const single =
+    str(c.compensationTierSummary) ||
+    str(c.scrapeableCompensationSalarySummary);
+  return single ? `Compensation: ${single}` : '';
+}
+
 /* ---------- board fetchers ---------- */
 
 async function fetchAshby(slug: string): Promise<NormalizedJob[]> {
@@ -119,17 +166,22 @@ async function fetchAshby(slug: string): Promise<NormalizedJob[]> {
   return jobs
     .map((entry): NormalizedJob => {
       const job = entry as Record<string, unknown>;
+      const base =
+        str(job.descriptionPlain) || stripHtml(str(job.descriptionHtml));
+      const comp = formatAshbyCompensation(job.compensation);
       return {
         title: str(job.title),
         location: str(job.location),
         url: str(job.jobUrl) || str(job.applyUrl),
-        descriptionText:
-          str(job.descriptionPlain) || stripHtml(str(job.descriptionHtml)),
+        descriptionText: comp ? (base ? `${base}\n\n${comp}` : comp) : base,
       };
     })
     .filter((job) => job.title.length > 0);
 }
 
+// Note: the Greenhouse job-board list API exposes no structured compensation
+// field — any pay range lives inside `content` (the HTML), which stripHtml
+// already folds into descriptionText. So no separate comp handling is needed.
 async function fetchGreenhouse(slug: string): Promise<NormalizedJob[]> {
   const res = await fetch(
     `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(
