@@ -3,12 +3,11 @@ import { generateClient } from "aws-amplify/data";
 import type { Schema } from "../../amplify/data/resource";
 import { getMyProfile } from "../lib/profile";
 import { createDraftApplication } from "../lib/applications";
+import { useAppData } from "../lib/AppDataContext";
 
 const client = generateClient<Schema>();
 
 type Role = Schema["Role"]["type"];
-type Application = Schema["Application"]["type"];
-type Company = Schema["Company"]["type"];
 type Attainability = "ENTRY_FREELANCE" | "MID" | "SENIOR_ONLY";
 
 const ATTAINABILITY_RANK: Record<string, number> = {
@@ -34,9 +33,7 @@ function formatFitScore(score?: number | null): string {
 }
 
 export default function Triage() {
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const { roles, applications, companies, loading } = useAppData();
 
   const [scoring, setScoring] = useState(false);
   const [scoreProgress, setScoreProgress] = useState<{
@@ -53,21 +50,11 @@ export default function Triage() {
   const [filterCompany, setFilterCompany] = useState<string>("ALL");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
+  // The batch scoring loop below reads `stopRef` each iteration; flip it on
+  // unmount so an in-flight run stops writing once this component is gone.
   useEffect(() => {
-    const subs = [
-      client.models.Role.observeQuery().subscribe({
-        next: ({ items }) => setRoles([...items]),
-      }),
-      client.models.Application.observeQuery().subscribe({
-        next: ({ items }) => setApplications([...items]),
-      }),
-      client.models.Company.observeQuery().subscribe({
-        next: ({ items }) => setCompanies([...items]),
-      }),
-    ];
     return () => {
       stopRef.current = true;
-      subs.forEach((s) => s.unsubscribe());
     };
   }, []);
 
@@ -232,6 +219,7 @@ export default function Triage() {
             <button
               type="button"
               className="score-btn"
+              disabled={loading}
               onClick={handleScoreAll}
             >
               SCORE UNSCORED ROLES{unscoredCount > 0 ? ` (${unscoredCount})` : ""}
@@ -241,73 +229,81 @@ export default function Triage() {
         </div>
       </div>
 
-      <div style={filterRowStyle}>
-        <label style={filterLabelStyle}>
-          Attainability
-          <select
-            className="field-input"
-            value={filterAttainability}
-            onChange={(e) =>
-              setFilterAttainability(e.target.value as "ALL" | Attainability)
-            }
-            style={filterSelectStyle}
-          >
-            <option value="ALL">ALL</option>
-            <option value="ENTRY_FREELANCE">ENTRY/FREELANCE</option>
-            <option value="MID">MID</option>
-            <option value="SENIOR_ONLY">SENIOR ONLY</option>
-          </select>
-        </label>
-        <label style={filterLabelStyle}>
-          Min Fit Score
-          <input
-            className="field-input"
-            type="number"
-            min={0}
-            max={100}
-            value={minFitScore}
-            onChange={(e) => setMinFitScore(Number(e.target.value) || 0)}
-            style={{ ...filterSelectStyle, width: "70px" }}
-          />
-        </label>
-        <label style={filterLabelStyle}>
-          Company
-          <select
-            className="field-input"
-            value={filterCompany}
-            onChange={(e) => setFilterCompany(e.target.value)}
-            style={filterSelectStyle}
-          >
-            <option value="ALL">ALL</option>
-            {companyOptions.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      {worklist.length === 0 ? (
-        <p style={emptyStyle}>
-          {candidates.length === 0
-            ? "No scored roles waiting on triage yet."
-            : "No roles match the current filters."}
-        </p>
+      {loading ? (
+        <p style={emptyStyle}>Loading roles…</p>
       ) : (
-        <ul style={listStyle}>
-          {worklist.map((role) => (
-            <TriageRow
-              key={role.id}
-              role={role}
-              companyName={
-                companyNameById.get(role.companyId ?? "") ?? "—"
-              }
-              expanded={expandedIds.has(role.id)}
-              onToggleExpanded={() => toggleExpanded(role.id)}
-            />
-          ))}
-        </ul>
+        <>
+          <div style={filterRowStyle}>
+            <label style={filterLabelStyle}>
+              Attainability
+              <select
+                className="field-input"
+                value={filterAttainability}
+                onChange={(e) =>
+                  setFilterAttainability(
+                    e.target.value as "ALL" | Attainability,
+                  )
+                }
+                style={filterSelectStyle}
+              >
+                <option value="ALL">ALL</option>
+                <option value="ENTRY_FREELANCE">ENTRY/FREELANCE</option>
+                <option value="MID">MID</option>
+                <option value="SENIOR_ONLY">SENIOR ONLY</option>
+              </select>
+            </label>
+            <label style={filterLabelStyle}>
+              Min Fit Score
+              <input
+                className="field-input"
+                type="number"
+                min={0}
+                max={100}
+                value={minFitScore}
+                onChange={(e) => setMinFitScore(Number(e.target.value) || 0)}
+                style={{ ...filterSelectStyle, width: "70px" }}
+              />
+            </label>
+            <label style={filterLabelStyle}>
+              Company
+              <select
+                className="field-input"
+                value={filterCompany}
+                onChange={(e) => setFilterCompany(e.target.value)}
+                style={filterSelectStyle}
+              >
+                <option value="ALL">ALL</option>
+                {companyOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {worklist.length === 0 ? (
+            <p style={emptyStyle}>
+              {candidates.length === 0
+                ? "No scored roles waiting on triage yet."
+                : "No roles match the current filters."}
+            </p>
+          ) : (
+            <ul style={listStyle}>
+              {worklist.map((role) => (
+                <TriageRow
+                  key={role.id}
+                  role={role}
+                  companyName={
+                    companyNameById.get(role.companyId ?? "") ?? "—"
+                  }
+                  expanded={expandedIds.has(role.id)}
+                  onToggleExpanded={() => toggleExpanded(role.id)}
+                />
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </section>
   );

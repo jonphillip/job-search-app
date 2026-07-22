@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { generateClient } from "aws-amplify/data";
 import type { Schema } from "../../amplify/data/resource";
+import { useAppData } from "../lib/AppDataContext";
 
 const client = generateClient<Schema>();
 
 type Application = Schema["Application"]["type"];
-type Role = Schema["Role"]["type"];
 type Company = Schema["Company"]["type"];
 
 type AppStatus =
@@ -76,24 +76,7 @@ const ACTIVE_STATUSES: AppStatus[] = [
 ];
 
 export default function PipelineBoard() {
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
-
-  useEffect(() => {
-    const subs = [
-      client.models.Application.observeQuery().subscribe({
-        next: ({ items }) => setApplications([...items]),
-      }),
-      client.models.Role.observeQuery().subscribe({
-        next: ({ items }) => setRoles([...items]),
-      }),
-      client.models.Company.observeQuery().subscribe({
-        next: ({ items }) => setCompanies([...items]),
-      }),
-    ];
-    return () => subs.forEach((s) => s.unsubscribe());
-  }, []);
+  const { applications, roles, companies, loading } = useAppData();
 
   const cards = useMemo<CardData[]>(() => {
     const roleById = new Map(roles.map((r) => [r.id, r]));
@@ -133,28 +116,36 @@ export default function PipelineBoard() {
   return (
     <section style={panelStyle}>
       <h2 style={headingStyle}>Pipeline</h2>
-      <CollapsedStrip label="DRAFT" cards={byStatus.get("DRAFT")!} />
-      <div style={boardStyle}>
-        {BOARD_COLUMNS.map((status) => {
-          const columnCards = byStatus.get(status)!;
-          return (
-            <div key={status} style={columnStyle}>
-              <div style={columnHeaderStyle}>
-                {status}{" "}
-                <span style={{ color: "#C94E1A" }}>{columnCards.length}</span>
-              </div>
-              {columnCards.length === 0 ? (
-                <div style={emptyColumnStyle}>&mdash; none yet &mdash;</div>
-              ) : (
-                columnCards.map((card) => (
-                  <ApplicationCard key={card.app.id} card={card} />
-                ))
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <CollapsedStrip label="REJECTED / WITHDRAWN" cards={closedCards} />
+      {loading ? (
+        <p style={loadingStyle}>Loading pipeline…</p>
+      ) : (
+        <>
+          <CollapsedStrip label="DRAFT" cards={byStatus.get("DRAFT")!} />
+          <div style={boardStyle}>
+            {BOARD_COLUMNS.map((status) => {
+              const columnCards = byStatus.get(status)!;
+              return (
+                <div key={status} style={columnStyle}>
+                  <div style={columnHeaderStyle}>
+                    {status}{" "}
+                    <span style={{ color: "#C94E1A" }}>
+                      {columnCards.length}
+                    </span>
+                  </div>
+                  {columnCards.length === 0 ? (
+                    <div style={emptyColumnStyle}>&mdash; none yet &mdash;</div>
+                  ) : (
+                    columnCards.map((card) => (
+                      <ApplicationCard key={card.app.id} card={card} />
+                    ))
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <CollapsedStrip label="REJECTED / WITHDRAWN" cards={closedCards} />
+        </>
+      )}
     </section>
   );
 }
@@ -299,6 +290,14 @@ const headingStyle: CSSProperties = {
   margin: 0,
   padding: "12px 16px",
   borderBottom: "1px solid #333",
+};
+
+const loadingStyle: CSSProperties = {
+  fontFamily: '"Courier Prime", monospace',
+  color: "#666660",
+  padding: "16px",
+  margin: 0,
+  fontSize: "14px",
 };
 
 const boardStyle: CSSProperties = {

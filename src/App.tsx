@@ -10,6 +10,7 @@ import ProfileSection from "./components/ProfileSection";
 import Triage from "./components/Triage";
 import StatsBar from "./components/StatsBar";
 import ActivityTicker from "./components/ActivityTicker";
+import { AppDataProvider } from "./lib/AppDataContext";
 
 function App() {
   // The paste-parser is a fallback for career sites with no importable ATS —
@@ -66,25 +67,27 @@ function App() {
                 </button>
               </div>
             </header>
-            <StatsBar />
-            <ProfileSection />
-            <PipelineBoard />
-            <Triage />
-            <CompanyForm />
-            <div style={parserToggleWrapStyle}>
-              <button
-                type="button"
-                style={parserToggleStyle}
-                onClick={() => setShowParser((v) => !v)}
-                aria-expanded={showParser}
-              >
-                {showParser ? "− cancel" : "+ paste a job posting manually"}
-              </button>
-            </div>
-            {showParser && (
-              <JobPostingParser onDone={() => setShowParser(false)} />
-            )}
-            <CompanyList />
+            <AppDataProvider>
+              <StatsBar />
+              <ProfileSection />
+              <PipelineBoard />
+              <Triage />
+              <CompanyForm />
+              <div style={parserToggleWrapStyle}>
+                <button
+                  type="button"
+                  style={parserToggleStyle}
+                  onClick={() => setShowParser((v) => !v)}
+                  aria-expanded={showParser}
+                >
+                  {showParser ? "− cancel" : "+ paste a job posting manually"}
+                </button>
+              </div>
+              {showParser && (
+                <JobPostingParser onDone={() => setShowParser(false)} />
+              )}
+              <CompanyList />
+            </AppDataProvider>
             <ActivityTicker />
           </main>
         )}

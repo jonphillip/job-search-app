@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useState, useMemo, type CSSProperties } from "react";
 import { generateClient } from "aws-amplify/data";
 import type { Schema } from "../../amplify/data/resource";
+import { useAppData } from "../lib/AppDataContext";
 
 const client = generateClient<Schema>();
 
-type Application = Schema["Application"]["type"];
 type Contact = Schema["Contact"]["type"];
 
 // APPLIED or later, excluding the terminal REJECTED / WITHDRAWN states.
@@ -18,19 +18,14 @@ function parseDate(d?: string | null): number | null {
 }
 
 export default function StatsBar() {
-  const [applications, setApplications] = useState<Application[]>([]);
+  const { applications } = useAppData();
   const [contacts, setContacts] = useState<Contact[]>([]);
 
   useEffect(() => {
-    const subs = [
-      client.models.Application.observeQuery().subscribe({
-        next: ({ items }) => setApplications([...items]),
-      }),
-      client.models.Contact.observeQuery().subscribe({
-        next: ({ items }) => setContacts([...items]),
-      }),
-    ];
-    return () => subs.forEach((s) => s.unsubscribe());
+    const sub = client.models.Contact.observeQuery().subscribe({
+      next: ({ items }) => setContacts([...items]),
+    });
+    return () => sub.unsubscribe();
   }, []);
 
   const stats = useMemo(() => {

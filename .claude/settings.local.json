@@ -24,7 +24,17 @@
       "Bash(aws lambda *)",
       "Bash(aws cloudformation *)",
       "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter '\\\\''ProcessId=9684'\\\\'' | Select-Object ProcessId, @{n='\\\\''Cmd'\\\\'';e={$_.CommandLine}} | Format-List')",
-      "Bash(aws iam get-role-policy *)"
+      "Bash(aws iam get-role-policy *)",
+      "Bash(netstat -ano)",
+      "Bash(powershell -Command \"Get-Process -Id 23788 | Select-Object Id,ProcessName,Path\" 2>&1)",
+      "Bash(curl -s http://localhost:5174/ -o /dev/null -w \"HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:5174/src/main.tsx -o /dev/null -w \"main.tsx transform HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:5174/src/App.tsx -o /dev/null -w \"App.tsx transform HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:5174/src/lib/AppDataContext.tsx -o /dev/null -w \"AppDataContext.tsx transform HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:5174/src/components/Triage.tsx -o /dev/null -w \"Triage.tsx transform HTTP %{http_code}\\\\n\")",
+      "Bash(pkill -f \"vite\")",
+      "Bash(powershell -Command \"Get-Process -Id 1932 -ErrorAction SilentlyContinue | Select-Object Id,ProcessName\" 2>&1)",
+      "Bash(powershell -Command \"Stop-Process -Id 1932 -Force\")"
     ]
   }
 }

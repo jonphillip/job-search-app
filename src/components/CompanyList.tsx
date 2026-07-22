@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useState,
   type CSSProperties,
   type FormEvent,
@@ -8,6 +9,7 @@ import { generateClient } from "aws-amplify/data";
 import type { Schema } from "../../amplify/data/resource";
 import { normalizeUrl, normalizeLocation } from "../lib/normalize";
 import { createDraftApplication } from "../lib/applications";
+import { useAppData } from "../lib/AppDataContext";
 import JobBoardImport from "./JobBoardImport";
 
 const client = generateClient<Schema>();
@@ -238,20 +240,17 @@ function NotesLine({
 /* ---------- company list ---------- */
 
 export default function CompanyList() {
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const { companies: unsortedCompanies, loading } = useAppData();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     void migrateRoleLocations();
-    const sub = client.models.Company.observeQuery().subscribe({
-      next: ({ items }) => {
-        setCompanies(
-          [...items].sort((a, b) => a.name.localeCompare(b.name)),
-        );
-      },
-    });
-    return () => sub.unsubscribe();
   }, []);
+
+  const companies = useMemo(
+    () => [...unsortedCompanies].sort((a, b) => a.name.localeCompare(b.name)),
+    [unsortedCompanies],
+  );
 
   const toggleExpanded = (id: string) => {
     setExpandedIds((prev) => {
@@ -268,7 +267,9 @@ export default function CompanyList() {
   return (
     <section style={panelStyle}>
       <h2 style={headingStyle}>Companies</h2>
-      {companies.length === 0 ? (
+      {loading ? (
+        <p style={emptyStyle}>Loading companies…</p>
+      ) : companies.length === 0 ? (
         <p style={emptyStyle}>No companies yet. Add one above.</p>
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
