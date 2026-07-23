@@ -9,11 +9,13 @@ const client = generateClient<Schema>();
 
 type Role = Schema["Role"]["type"];
 type Attainability = "ENTRY_FREELANCE" | "MID" | "SENIOR_ONLY";
+type SortOption = "FIT_DESC" | "FIT_ASC" | "RECENT" | "OLDEST";
 
-const ATTAINABILITY_RANK: Record<string, number> = {
-  ENTRY_FREELANCE: 0,
-  MID: 1,
-  SENIOR_ONLY: 2,
+const SORT_LABELS: Record<SortOption, string> = {
+  FIT_DESC: "Fit score, high → low",
+  FIT_ASC: "Fit score, low → high",
+  RECENT: "Recently scored first",
+  OLDEST: "Oldest scored first",
 };
 
 const ATTAINABILITY_COLORS: Record<string, string> = {
@@ -48,7 +50,10 @@ export default function Triage() {
   >("ALL");
   const [minFitScore, setMinFitScore] = useState(0);
   const [filterCompany, setFilterCompany] = useState<string>("ALL");
+  const [sortOption, setSortOption] = useState<SortOption>("FIT_DESC");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  // Primary workflow view — expanded by default so it's usable at a glance.
+  const [collapsed, setCollapsed] = useState(false);
 
   // The batch scoring loop below reads `stopRef` each iteration; flip it on
   // unmount so an in-flight run stops writing once this component is gone.
@@ -90,28 +95,31 @@ export default function Triage() {
   }, [candidates, companyNameById]);
 
   const worklist = useMemo(() => {
-    return candidates
+    const filtered = candidates
       .filter(
         (r) =>
           filterAttainability === "ALL" ||
           r.attainability === filterAttainability,
       )
       .filter((r) => (r.fitScore ?? 0) >= minFitScore)
-      .filter((r) => filterCompany === "ALL" || r.companyId === filterCompany)
-      .sort((a, b) => {
-        // Primary: fit score descending. Secondary: when fit is tied (or
-        // close — scores are coarse), surface ENTRY_FREELANCE first, since
-        // those are the realistic entry points. This deliberately does NOT
-        // let attainability override a real fit gap — a 95-fit SENIOR_ONLY
-        // role still outranks a 10-fit ENTRY_FREELANCE one.
-        const fitDiff = (b.fitScore ?? 0) - (a.fitScore ?? 0);
-        if (Math.abs(fitDiff) >= 10) return fitDiff;
-        const rankDiff =
-          (ATTAINABILITY_RANK[a.attainability ?? ""] ?? 99) -
-          (ATTAINABILITY_RANK[b.attainability ?? ""] ?? 99);
-        return rankDiff !== 0 ? rankDiff : fitDiff;
-      });
-  }, [candidates, filterAttainability, minFitScore, filterCompany]);
+      .filter((r) => filterCompany === "ALL" || r.companyId === filterCompany);
+
+    // Sort is a single explicit axis (no hidden secondary sort) — surfacing
+    // ENTRY_FREELANCE roles is handled purely via the Attainability filter
+    // above, so switching sort options here always means what it says.
+    return filtered.sort((a, b) => {
+      switch (sortOption) {
+        case "FIT_DESC":
+          return (b.fitScore ?? 0) - (a.fitScore ?? 0);
+        case "FIT_ASC":
+          return (a.fitScore ?? 0) - (b.fitScore ?? 0);
+        case "RECENT":
+          return (b.scoredAt ?? "").localeCompare(a.scoredAt ?? "");
+        case "OLDEST":
+          return (a.scoredAt ?? "").localeCompare(b.scoredAt ?? "");
+      }
+    });
+  }, [candidates, filterAttainability, minFitScore, filterCompany, sortOption]);
 
   const unscoredCount = roles.filter((r) => !r.scoredAt).length;
 
@@ -198,7 +206,17 @@ export default function Triage() {
   return (
     <section style={panelStyle}>
       <div style={headerRowStyle}>
-        <h2 style={headingStyle}>Triage</h2>
+        <button
+          type="button"
+          className="section-toggle-btn"
+          onClick={() => setCollapsed((v) => !v)}
+          aria-expanded={!collapsed}
+        >
+          <span style={{ color: "#666660", marginRight: "8px" }}>
+            {collapsed ? "▶" : "▼"}
+          </span>
+          TRIAGE <span style={{ color: "#C94E1A" }}>({candidates.length})</span>
+        </button>
         <div style={scoreActionStyle}>
           {scoring ? (
             <>
@@ -229,11 +247,26 @@ export default function Triage() {
         </div>
       </div>
 
-      {loading ? (
+      {collapsed ? null : loading ? (
         <p style={emptyStyle}>Loading roles…</p>
       ) : (
         <>
           <div style={filterRowStyle}>
+            <label style={filterLabelStyle}>
+              Sort
+              <select
+                className="field-input"
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value as SortOption)}
+                style={filterSelectStyle}
+              >
+                {(Object.keys(SORT_LABELS) as SortOption[]).map((opt) => (
+                  <option key={opt} value={opt}>
+                    {SORT_LABELS[opt]}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label style={filterLabelStyle}>
               Attainability
               <select
@@ -441,16 +474,6 @@ const headerRowStyle: CSSProperties = {
   gap: "10px",
   borderBottom: "1px solid #333",
   padding: "12px 16px",
-};
-
-const headingStyle: CSSProperties = {
-  fontFamily: '"Courier Prime", monospace',
-  fontWeight: 700,
-  fontSize: "22px",
-  textTransform: "uppercase",
-  letterSpacing: "1.5px",
-  color: "#CCCCBB",
-  margin: 0,
 };
 
 const scoreActionStyle: CSSProperties = {

@@ -245,6 +245,24 @@ main {
   color: #c94e1a;
 }
 
+.section-toggle-btn {
+  font-family: "Courier Prime", monospace;
+  font-weight: 700;
+  font-size: 22px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #ccccbb;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.section-toggle-btn:hover {
+  color: #c94e1a;
+}
+
 .btn-primary {
   font-family: "Courier Prime", monospace;
   font-size: 13px;
